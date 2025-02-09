@@ -1,0 +1,32 @@
+# .gitignore
+# Go binary
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment files
+.env
+.env.local
+
+# Go workspace file
+go.work
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories (remove the comment below if you want to check in your vendor directory)
+vendor/
+
+# OS specific
+.DS_Store
