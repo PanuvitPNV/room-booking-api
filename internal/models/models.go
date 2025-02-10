@@ -12,13 +12,14 @@ type RoomType struct {
 	Facility      string `json:"facility"`
 	PricePerNight int    `gorm:"not null" json:"price_per_night" validate:"required"`
 	Capacity      int    `gorm:"not null" json:"capacity" validate:"required"`
+	Rooms         []Room `gorm:"foreignKey:TypeID" json:"rooms,omitempty"` // Add this line
 }
 
 // Room depends on RoomType
 type Room struct {
 	RoomNum  int      `gorm:"primaryKey;column:room_num" json:"room_num"`
 	TypeID   int      `gorm:"not null" json:"type_id" validate:"required"`
-	RoomType RoomType `gorm:"foreignKey:TypeID;references:TypeID"`
+	RoomType RoomType `gorm:"foreignKey:TypeID;references:TypeID" json:"room_type"`
 }
 
 // Guest has no foreign key dependencies
@@ -29,6 +30,7 @@ type Guest struct {
 	DateOfBirth time.Time `gorm:"not null" json:"date_of_birth" validate:"required"`
 	Email       string    `gorm:"unique;not null" json:"email" validate:"required,email"`
 	Phone       string    `gorm:"unique;not null" json:"phone" validate:"required"`
+	Bookings    []Booking `gorm:"foreignKey:GuestID" json:"bookings,omitempty"` // Add this line
 }
 
 // Booking depends on Room and Guest
@@ -39,8 +41,8 @@ type Booking struct {
 	CheckInDate  time.Time `gorm:"not null" json:"check_in_date" validate:"required"`
 	CheckOutDate time.Time `gorm:"not null" json:"check_out_date" validate:"required"`
 	TotalPrice   int       `gorm:"not null" json:"total_price"`
-	Room         Room      `gorm:"foreignKey:RoomNum;references:RoomNum"`
-	Guest        Guest     `gorm:"foreignKey:GuestID;references:GuestID"`
+	Room         Room      `gorm:"foreignKey:RoomNum;references:RoomNum" json:"room"`
+	Guest        Guest     `gorm:"foreignKey:GuestID" json:"guest"`
 }
 
 // RoomStatus depends on Room and Booking

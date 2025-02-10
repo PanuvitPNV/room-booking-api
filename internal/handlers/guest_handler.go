@@ -165,8 +165,8 @@ func (h *GuestHandler) UpdateGuest(c echo.Context) error {
 // @Tags guests
 // @Accept json
 // @Produce json
-// @Param page query int true "Page number"
-// @Param page_size query int true "Items per page"
+// @Param page query int false "Page number"
+// @Param page_size query int false "Items per page"
 // @Success 200 {object} response.GuestListResponse
 // @Router /guests [get]
 func (h *GuestHandler) ListGuests(c echo.Context) error {

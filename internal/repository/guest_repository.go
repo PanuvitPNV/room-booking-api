@@ -53,7 +53,10 @@ func (r *guestRepository) GetByID(ctx context.Context, guestID int) (*models.Gue
 	db := r.getDB(ctx)
 	var guest models.Guest
 
-	err := db.Preload("Bookings.Room.RoomType").
+	err := db.
+		Preload("Bookings").
+		Preload("Bookings.Room").
+		Preload("Bookings.Room.RoomType").
 		First(&guest, guestID).Error
 
 	if err != nil {

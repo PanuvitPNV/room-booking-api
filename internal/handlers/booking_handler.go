@@ -134,20 +134,22 @@ func (h *BookingHandler) GetBooking(c echo.Context) error {
 // @Produce json
 // @Param guest_id query int false "Filter by guest ID"
 // @Param room_num query int false "Filter by room number"
-// @Param page query int true "Page number"
-// @Param page_size query int true "Items per page"
+// @Param page query int false "Page number"
+// @Param page_size query int false "Items per page"
 // @Success 200 {object} response.BookingListResponse
 // @Router /bookings [get]
 func (h *BookingHandler) ListBookings(c echo.Context) error {
-	var req request.GetBookingsRequest
-	if err := c.Bind(&req); err != nil {
+	// Use the separate function for parsing request params
+	req, err := request.ParseGetBookingsRequest(c)
+	if err != nil {
 		return c.JSON(http.StatusBadRequest, response.ErrorResponse{
 			Error: "Invalid request parameters",
 			Code:  http.StatusBadRequest,
 		})
 	}
 
-	bookings, total, err := h.bookingService.ListBookings(c.Request().Context(), &req)
+	// Call service
+	bookings, total, err := h.bookingService.ListBookings(c.Request().Context(), req)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, response.ErrorResponse{
 			Error: "Failed to retrieve bookings",
@@ -155,6 +157,7 @@ func (h *BookingHandler) ListBookings(c echo.Context) error {
 		})
 	}
 
+	// Convert bookings to response format
 	var bookingResponses []response.BookingResponse
 	for _, booking := range bookings {
 		bookingResponses = append(bookingResponses, response.BookingResponse{
@@ -169,6 +172,7 @@ func (h *BookingHandler) ListBookings(c echo.Context) error {
 		})
 	}
 
+	// Return paginated response
 	return c.JSON(http.StatusOK, response.BookingListResponse{
 		Bookings: bookingResponses,
 		Total:    total,

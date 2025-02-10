@@ -140,8 +140,8 @@ func (h *RoomHandler) GetRoom(c echo.Context) error {
 // @Accept json
 // @Produce json
 // @Param type_id query int false "Filter by room type"
-// @Param page query int true "Page number"
-// @Param page_size query int true "Items per page"
+// @Param page query int false "Page number"
+// @Param page_size query int false "Items per page"
 // @Success 200 {object} response.RoomListResponse
 // @Router /rooms [get]
 func (h *RoomHandler) ListRooms(c echo.Context) error {
@@ -236,4 +236,172 @@ func (h *RoomHandler) GetAvailableRooms(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, availableRooms)
+}
+
+// CreateRoomType handles room type creation
+// @Summary Create a new room type
+// @Description Create a new room type with the provided details
+// @Tags room-types
+// @Accept json
+// @Produce json
+// @Param roomType body request.CreateRoomTypeRequest true "Room Type details"
+// @Success 201 {object} response.RoomTypeResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Router /rooms/types [post]
+func (h *RoomHandler) CreateRoomType(c echo.Context) error {
+	var req request.CreateRoomTypeRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, response.ErrorResponse{
+			Error: "Invalid request format",
+			Code:  http.StatusBadRequest,
+		})
+	}
+
+	if err := c.Validate(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, response.ErrorResponse{
+			Error: "Validation failed",
+			Code:  http.StatusBadRequest,
+		})
+	}
+
+	roomType, err := h.roomTypeService.CreateRoomType(c.Request().Context(), &req)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, response.ErrorResponse{
+			Error: err.Error(),
+			Code:  http.StatusInternalServerError,
+		})
+	}
+
+	return c.JSON(http.StatusCreated, convertToRoomTypeResponse(*roomType))
+}
+
+// GetRoomType handles fetching a single room type
+// @Summary Get room type details
+// @Description Get details of a specific room type
+// @Tags room-types
+// @Accept json
+// @Produce json
+// @Param id path int true "Room Type ID"
+// @Success 200 {object} response.RoomTypeResponse
+// @Failure 404 {object} response.ErrorResponse
+// @Router /rooms/types/{id} [get]
+func (h *RoomHandler) GetRoomType(c echo.Context) error {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, response.ErrorResponse{
+			Error: "Invalid room type ID",
+			Code:  http.StatusBadRequest,
+		})
+	}
+
+	roomType, err := h.roomTypeService.GetRoomTypeByID(c.Request().Context(), id)
+	if err != nil {
+		if err == service.ErrRoomTypeNotFound {
+			return c.JSON(http.StatusNotFound, response.ErrorResponse{
+				Error: "Room type not found",
+				Code:  http.StatusNotFound,
+			})
+		}
+		return c.JSON(http.StatusInternalServerError, response.ErrorResponse{
+			Error: "Failed to retrieve room type",
+			Code:  http.StatusInternalServerError,
+		})
+	}
+
+	return c.JSON(http.StatusOK, convertToRoomTypeResponse(*roomType))
+}
+
+// UpdateRoomType handles room type updates
+// @Summary Update room type
+// @Description Update an existing room type's details
+// @Tags room-types
+// @Accept json
+// @Produce json
+// @Param id path int true "Room Type ID"
+// @Param roomType body request.UpdateRoomTypeRequest true "Room Type details"
+// @Success 200 {object} response.RoomTypeResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse
+// @Router /rooms/types/{id} [put]
+func (h *RoomHandler) UpdateRoomType(c echo.Context) error {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, response.ErrorResponse{
+			Error: "Invalid room type ID",
+			Code:  http.StatusBadRequest,
+		})
+	}
+
+	var req request.UpdateRoomTypeRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, response.ErrorResponse{
+			Error: "Invalid request format",
+			Code:  http.StatusBadRequest,
+		})
+	}
+
+	if err := c.Validate(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, response.ErrorResponse{
+			Error: "Validation failed",
+			Code:  http.StatusBadRequest,
+		})
+	}
+
+	roomType, err := h.roomTypeService.UpdateRoomType(c.Request().Context(), id, &req)
+	if err != nil {
+		if err == service.ErrRoomTypeNotFound {
+			return c.JSON(http.StatusNotFound, response.ErrorResponse{
+				Error: "Room type not found",
+				Code:  http.StatusNotFound,
+			})
+		}
+		return c.JSON(http.StatusInternalServerError, response.ErrorResponse{
+			Error: "Failed to update room type",
+			Code:  http.StatusInternalServerError,
+		})
+	}
+
+	return c.JSON(http.StatusOK, convertToRoomTypeResponse(*roomType))
+}
+
+// ListRoomTypes handles fetching all room types
+// @Summary List room types
+// @Description Get a paginated list of room types
+// @Tags room-types
+// @Accept json
+// @Produce json
+// @Param page query int false "Page number"
+// @Param page_size query int false "Items per page"
+// @Success 200 {object} response.RoomTypeListResponse
+// @Router /rooms/types [get]
+func (h *RoomHandler) ListRoomTypes(c echo.Context) error {
+	page, _ := strconv.Atoi(c.QueryParam("page"))
+	pageSize, _ := strconv.Atoi(c.QueryParam("page_size"))
+
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 10
+	}
+
+	roomTypes, total, err := h.roomTypeService.ListRoomTypes(c.Request().Context(), page, pageSize)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, response.ErrorResponse{
+			Error: "Failed to retrieve room types",
+			Code:  http.StatusInternalServerError,
+		})
+	}
+
+	var roomTypeResponses []response.RoomTypeResponse
+	for _, rt := range roomTypes {
+		roomTypeResponses = append(roomTypeResponses, convertToRoomTypeResponse(rt))
+	}
+
+	return c.JSON(http.StatusOK, response.RoomTypeListResponse{
+		RoomTypes: roomTypeResponses,
+		Total:     total,
+		Page:      page,
+		LastPage:  (total + pageSize - 1) / pageSize,
+	})
 }

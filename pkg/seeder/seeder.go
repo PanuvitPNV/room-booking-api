@@ -1,4 +1,3 @@
-// pkg/seeder/seeder.go
 package main
 
 import (
@@ -56,7 +55,7 @@ func main() {
 	}
 	log.Println("Room types seeded successfully")
 
-	// 2. Seed Rooms
+	// 2. Seed Rooms (this will trigger automatic room status creation for 1 year)
 	rooms := []models.Room{
 		{RoomNum: 201, TypeID: roomTypes[0].TypeID}, // Standard Twin
 		{RoomNum: 202, TypeID: roomTypes[0].TypeID}, // Standard Twin
@@ -65,8 +64,11 @@ func main() {
 		{RoomNum: 401, TypeID: roomTypes[2].TypeID}, // Family Suite
 	}
 
-	if err := gormDB.Create(&rooms).Error; err != nil {
-		log.Fatalf("Error seeding rooms: %v", err)
+	// Create rooms one by one to ensure trigger works properly
+	for _, room := range rooms {
+		if err := gormDB.Create(&room).Error; err != nil {
+			log.Printf("Error seeding room %d: %v", room.RoomNum, err)
+		}
 	}
 	log.Println("Rooms seeded successfully")
 
@@ -100,24 +102,30 @@ func main() {
 	}
 	log.Println("Guests seeded successfully")
 
-	// 4. Create bookings (will automatically trigger room status updates)
-	tomorrow := time.Now().AddDate(0, 0, 1)
-	nextWeek := time.Now().AddDate(0, 0, 7)
-
+	// 4. Create bookings (will automatically update room statuses)
+	// Use dates within the current year
+	currentYear := time.Now().Year()
 	bookings := []models.Booking{
 		{
 			RoomNum:      201,
 			GuestID:      guests[0].GuestID,
-			CheckInDate:  tomorrow,
-			CheckOutDate: tomorrow.AddDate(0, 0, 3),
+			CheckInDate:  time.Date(currentYear, 2, 15, 14, 0, 0, 0, time.UTC),
+			CheckOutDate: time.Date(currentYear, 2, 18, 12, 0, 0, 0, time.UTC),
 			TotalPrice:   roomTypes[0].PricePerNight * 3,
 		},
 		{
 			RoomNum:      301,
 			GuestID:      guests[1].GuestID,
-			CheckInDate:  nextWeek,
-			CheckOutDate: nextWeek.AddDate(0, 0, 2),
+			CheckInDate:  time.Date(currentYear, 3, 1, 14, 0, 0, 0, time.UTC),
+			CheckOutDate: time.Date(currentYear, 3, 3, 12, 0, 0, 0, time.UTC),
 			TotalPrice:   roomTypes[1].PricePerNight * 2,
+		},
+		{
+			RoomNum:      401,
+			GuestID:      guests[2].GuestID,
+			CheckInDate:  time.Date(currentYear, 4, 10, 14, 0, 0, 0, time.UTC),
+			CheckOutDate: time.Date(currentYear, 4, 15, 12, 0, 0, 0, time.UTC),
+			TotalPrice:   roomTypes[2].PricePerNight * 5,
 		},
 	}
 
@@ -127,10 +135,6 @@ func main() {
 		}
 	}
 	log.Println("Bookings seeded successfully")
-
-	// Room statuses will be automatically created by the trigger
-
-	log.Println("All data seeded successfully!")
 
 	// Print summary of seeded data
 	var roomTypeCount, roomCount, guestCount, bookingCount, statusCount int64
@@ -145,5 +149,12 @@ func main() {
 	log.Printf("Rooms: %d", roomCount)
 	log.Printf("Guests: %d", guestCount)
 	log.Printf("Bookings: %d", bookingCount)
-	log.Printf("Room Statuses: %d", statusCount)
+	log.Printf("Room Statuses: %d (should be rooms × 365)", statusCount)
+
+	// Verify room statuses
+	var availableCount, occupiedCount int64
+	gormDB.Model(&models.RoomStatus{}).Where("status = ?", "Available").Count(&availableCount)
+	gormDB.Model(&models.RoomStatus{}).Where("status = ?", "Occupied").Count(&occupiedCount)
+	log.Printf("Available Room Statuses: %d", availableCount)
+	log.Printf("Occupied Room Statuses: %d", occupiedCount)
 }

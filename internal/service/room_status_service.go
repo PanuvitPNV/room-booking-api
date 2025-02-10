@@ -68,7 +68,6 @@ func (s *roomStatusService) GetAllRoomStatus(ctx context.Context, date time.Time
 }
 
 // Additional helper methods for internal use
-
 func (s *roomStatusService) updateRoomStatusForBooking(ctx context.Context, booking *models.Booking, status string) error {
 	currentDate := booking.CheckInDate
 	for currentDate.Before(booking.CheckOutDate) {

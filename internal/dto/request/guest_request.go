@@ -29,7 +29,7 @@ type GetGuestRequest struct {
 
 // ListGuestsRequest for paginated guest listing
 type ListGuestsRequest struct {
-	Page     int    `json:"page" validate:"required,min=1"`
-	PageSize int    `json:"page_size" validate:"required,min=1,max=100"`
+	Page     int    `json:"page" validate:"required,min=1" default:"1"`
+	PageSize int    `json:"page_size" validate:"required,min=1,max=100" default:"10"`
 	Search   string `json:"search,omitempty"`
 }

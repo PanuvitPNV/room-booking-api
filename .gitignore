@@ -31,3 +31,7 @@ vendor/
 
 # OS specific
 .DS_Store
+
+# Air
+tmp/
+*.log

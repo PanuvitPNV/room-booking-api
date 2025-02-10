@@ -30,6 +30,6 @@ type GetBookingsRequest struct {
 	RoomNum  *int       `json:"room_num,omitempty"`
 	FromDate *time.Time `json:"from_date,omitempty"`
 	ToDate   *time.Time `json:"to_date,omitempty"`
-	Page     int        `json:"page" validate:"required,min=1"`
-	PageSize int        `json:"page_size" validate:"required,min=1,max=100"`
+	Page     int        `json:"page" validate:"required,min=1" default:"1"`
+	PageSize int        `json:"page_size" validate:"required,min=1,max=100" default:"10"`
 }

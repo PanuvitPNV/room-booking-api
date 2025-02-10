@@ -31,10 +31,22 @@ func (r *bookingRepository) Create(ctx context.Context, booking *models.Booking)
 			return errors.New("room is not available for the selected dates")
 		}
 
+		// Create booking without nested objects
+		bookingToCreate := &models.Booking{
+			RoomNum:      booking.RoomNum,
+			GuestID:      booking.GuestID,
+			CheckInDate:  booking.CheckInDate,
+			CheckOutDate: booking.CheckOutDate,
+			TotalPrice:   booking.TotalPrice,
+		}
+
 		// Create booking
-		if err := db.Create(booking).Error; err != nil {
+		if err := db.Create(bookingToCreate).Error; err != nil {
 			return err
 		}
+
+		// Copy the created booking ID back to original booking
+		booking.BookingID = bookingToCreate.BookingID
 
 		// Update room status
 		return r.updateRoomStatus(txCtx, booking)
@@ -153,34 +165,37 @@ func (r *bookingRepository) GetRoomBookings(ctx context.Context, roomNum int) ([
 
 func (r *bookingRepository) CheckRoomAvailability(ctx context.Context, roomNum int, checkIn, checkOut time.Time) (bool, error) {
 	db := r.getDB(ctx)
-	var count int64
+	var bookings []models.Booking
 
-	err := db.Model(&models.Booking{}).
-		Where("room_num = ? AND "+
-			"((check_in_date < ? AND check_out_date > ?) OR "+
-			"(check_in_date BETWEEN ? AND ?) OR "+
-			"(check_out_date BETWEEN ? AND ?))",
-			roomNum,
-			checkOut, checkIn,
-			checkIn, checkOut,
-			checkIn, checkOut).
-		Count(&count).Error
+	// Check for overlapping bookings without using COUNT
+	err := db.Where(`
+        room_num = ? AND (
+            (check_in_date < ? AND check_out_date > ?) OR 
+            (check_in_date BETWEEN ? AND ?) OR 
+            (check_out_date BETWEEN ? AND ?)
+        )`,
+		roomNum,
+		checkOut, checkIn,
+		checkIn, checkOut,
+		checkIn, checkOut,
+	).Find(&bookings).Error
 
 	if err != nil {
 		return false, err
 	}
 
-	return count == 0, nil
+	// Room is available if no overlapping bookings found
+	return len(bookings) == 0, nil
 }
 
 // Private helper methods
 
 func (r *bookingRepository) checkRoomAvailabilityWithLock(ctx context.Context, roomNum int, checkIn, checkOut time.Time) (bool, error) {
 	db := r.getDB(ctx)
+	var bookings []models.Booking
 
-	var count int64
+	// Query for overlapping bookings with lock
 	err := db.Clauses(clause.Locking{Strength: "UPDATE"}).
-		Model(&models.Booking{}).
 		Where("room_num = ? AND "+
 			"((check_in_date < ? AND check_out_date > ?) OR "+
 			"(check_in_date BETWEEN ? AND ?) OR "+
@@ -189,9 +204,14 @@ func (r *bookingRepository) checkRoomAvailabilityWithLock(ctx context.Context, r
 			checkOut, checkIn,
 			checkIn, checkOut,
 			checkIn, checkOut).
-		Count(&count).Error
+		Find(&bookings).Error
 
-	return count == 0, err
+	if err != nil {
+		return false, err
+	}
+
+	// Room is available if no overlapping bookings found
+	return len(bookings) == 0, nil
 }
 
 func (r *bookingRepository) updateRoomStatus(ctx context.Context, booking *models.Booking) error {

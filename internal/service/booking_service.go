@@ -38,14 +38,32 @@ func (s *bookingService) getRoomLock(roomNum int) *sync.Mutex {
 }
 
 func (s *bookingService) CreateBooking(ctx context.Context, req *request.CreateBookingRequest) (*models.Booking, error) {
-	// Get room-specific lock
+	// Get room-specific lock for concurrency control
 	lock := s.getRoomLock(req.RoomNum)
 	lock.Lock()
 	defer lock.Unlock()
 
 	var booking *models.Booking
 	err := s.bookingRepo.WithinTransaction(ctx, func(txCtx context.Context) error {
-		// Check room availability
+		// 1. Verify guest exists
+		guest, err := s.guestRepo.GetByID(txCtx, req.GuestID)
+		if err != nil {
+			if err == repository.ErrRecordNotFound {
+				return ErrGuestNotFound
+			}
+			return err
+		}
+
+		// 2. Verify room exists and get room details
+		room, err := s.roomRepo.GetByNum(txCtx, req.RoomNum)
+		if err != nil {
+			if err == repository.ErrRecordNotFound {
+				return ErrRoomNotFound
+			}
+			return err
+		}
+
+		// 3. Check room availability
 		available, err := s.bookingRepo.CheckRoomAvailability(txCtx, req.RoomNum, req.CheckInDate, req.CheckOutDate)
 		if err != nil {
 			return err
@@ -54,51 +72,35 @@ func (s *bookingService) CreateBooking(ctx context.Context, req *request.CreateB
 			return ErrRoomNotAvailable
 		}
 
-		// Get room details for price calculation
-		room, err := s.roomRepo.GetByNum(txCtx, req.RoomNum)
-		if err != nil {
-			return err
+		// 4. Validate dates
+		if req.CheckInDate.Before(time.Now()) {
+			return ErrInvalidDateRange
+		}
+		if !req.CheckOutDate.After(req.CheckInDate) {
+			return ErrInvalidDateRange
 		}
 
-		// Verify guest exists
-		_, err = s.guestRepo.GetByID(txCtx, req.GuestID)
-		if err != nil {
-			return ErrGuestNotFound
-		}
-
-		// Calculate total price
+		// 5. Calculate total price
 		nights := int(req.CheckOutDate.Sub(req.CheckInDate).Hours() / 24)
+		if nights < 1 {
+			return ErrInvalidDateRange
+		}
 		totalPrice := room.RoomType.PricePerNight * nights
 
+		// 6. Create booking
 		booking = &models.Booking{
 			RoomNum:      req.RoomNum,
 			GuestID:      req.GuestID,
 			CheckInDate:  req.CheckInDate,
 			CheckOutDate: req.CheckOutDate,
 			TotalPrice:   totalPrice,
+			Room:         *room,
+			Guest:        *guest,
 		}
 
-		// Create booking
-		err = s.bookingRepo.Create(txCtx, booking)
-		if err != nil {
+		// 7. Save booking - room status will be updated by trigger
+		if err := s.bookingRepo.Create(txCtx, booking); err != nil {
 			return err
-		}
-
-		// Update room status for each day of the booking
-		currentDate := req.CheckInDate
-		for currentDate.Before(req.CheckOutDate) {
-			status := &models.RoomStatus{
-				RoomNum:   req.RoomNum,
-				Calendar:  currentDate,
-				Status:    "Occupied",
-				BookingID: &booking.BookingID,
-			}
-
-			if err := s.roomStatusRepo.Create(txCtx, status); err != nil {
-				return err
-			}
-
-			currentDate = currentDate.AddDate(0, 0, 1)
 		}
 
 		return nil

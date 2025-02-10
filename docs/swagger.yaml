@@ -1,0 +1,852 @@
+basePath: /v1
+definitions:
+  request.CheckAvailabilityRequest:
+    properties:
+      check_in_date:
+        type: string
+      check_out_date:
+        type: string
+      room_num:
+        type: integer
+    required:
+    - check_in_date
+    - check_out_date
+    - room_num
+    type: object
+  request.CreateBookingRequest:
+    properties:
+      check_in_date:
+        type: string
+      check_out_date:
+        type: string
+      guest_id:
+        type: integer
+      room_num:
+        type: integer
+    required:
+    - check_in_date
+    - check_out_date
+    - guest_id
+    - room_num
+    type: object
+  request.CreateGuestRequest:
+    properties:
+      date_of_birth:
+        type: string
+      email:
+        type: string
+      f_name:
+        type: string
+      l_name:
+        type: string
+      phone:
+        type: string
+    required:
+    - date_of_birth
+    - email
+    - f_name
+    - l_name
+    - phone
+    type: object
+  request.CreateRoomRequest:
+    properties:
+      room_num:
+        type: integer
+      type_id:
+        type: integer
+    required:
+    - room_num
+    - type_id
+    type: object
+  request.CreateRoomTypeRequest:
+    properties:
+      area:
+        type: integer
+      capacity:
+        type: integer
+      description:
+        type: string
+      facility:
+        type: string
+      highlight:
+        type: string
+      name:
+        type: string
+      price_per_night:
+        type: integer
+    required:
+    - area
+    - capacity
+    - name
+    - price_per_night
+    type: object
+  request.GetAvailableRoomsRequest:
+    properties:
+      check_in_date:
+        type: string
+      check_out_date:
+        type: string
+      type_id:
+        type: integer
+    required:
+    - check_in_date
+    - check_out_date
+    type: object
+  request.UpdateGuestRequest:
+    properties:
+      date_of_birth:
+        type: string
+      email:
+        type: string
+      f_name:
+        type: string
+      guest_id:
+        type: integer
+      l_name:
+        type: string
+      phone:
+        type: string
+    required:
+    - guest_id
+    type: object
+  request.UpdateRoomTypeRequest:
+    properties:
+      area:
+        type: integer
+      capacity:
+        type: integer
+      description:
+        type: string
+      facility:
+        type: string
+      highlight:
+        type: string
+      name:
+        type: string
+      price_per_night:
+        type: integer
+      type_id:
+        type: integer
+    required:
+    - type_id
+    type: object
+  response.BookingAvailabilityResponse:
+    properties:
+      price_per_night:
+        type: integer
+      room_num:
+        type: integer
+      room_type:
+        type: string
+      status:
+        type: string
+    type: object
+  response.BookingDetailResponse:
+    properties:
+      booking_id:
+        type: integer
+      check_in_date:
+        type: string
+      check_out_date:
+        type: string
+      created_at:
+        type: string
+      guest:
+        $ref: '#/definitions/response.GuestResponse'
+      guest_id:
+        type: integer
+      room:
+        $ref: '#/definitions/response.RoomResponse'
+      room_num:
+        type: integer
+      status:
+        type: string
+      total_price:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  response.BookingListResponse:
+    properties:
+      bookings:
+        items:
+          $ref: '#/definitions/response.BookingResponse'
+        type: array
+      last_page:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+    type: object
+  response.BookingResponse:
+    properties:
+      booking_id:
+        type: integer
+      check_in_date:
+        type: string
+      check_out_date:
+        type: string
+      guest:
+        $ref: '#/definitions/response.GuestResponse'
+      guest_id:
+        type: integer
+      room:
+        $ref: '#/definitions/response.RoomResponse'
+      room_num:
+        type: integer
+      total_price:
+        type: integer
+    type: object
+  response.ErrorResponse:
+    properties:
+      code:
+        type: integer
+      description:
+        type: string
+      error:
+        type: string
+    type: object
+  response.GuestBookingHistoryResponse:
+    properties:
+      bookings:
+        items:
+          $ref: '#/definitions/response.BookingResponse'
+        type: array
+      guest_id:
+        type: integer
+      last_page:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+    type: object
+  response.GuestDetailResponse:
+    properties:
+      created_at:
+        type: string
+      date_of_birth:
+        type: string
+      email:
+        type: string
+      f_name:
+        type: string
+      guest_id:
+        type: integer
+      l_name:
+        type: string
+      phone:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  response.GuestListResponse:
+    properties:
+      guests:
+        items:
+          $ref: '#/definitions/response.GuestResponse'
+        type: array
+      last_page:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+    type: object
+  response.GuestResponse:
+    properties:
+      date_of_birth:
+        type: string
+      email:
+        type: string
+      f_name:
+        type: string
+      guest_id:
+        type: integer
+      l_name:
+        type: string
+      phone:
+        type: string
+    type: object
+  response.RoomAvailabilityResponse:
+    properties:
+      price_per_night:
+        type: integer
+      room_num:
+        type: integer
+      room_type:
+        type: string
+      status:
+        type: string
+    type: object
+  response.RoomDetailResponse:
+    properties:
+      current_status:
+        $ref: '#/definitions/response.RoomStatusInfo'
+      room_num:
+        type: integer
+      room_type:
+        $ref: '#/definitions/response.RoomTypeResponse'
+      type_id:
+        type: integer
+    type: object
+  response.RoomListResponse:
+    properties:
+      last_page:
+        type: integer
+      page:
+        type: integer
+      rooms:
+        items:
+          $ref: '#/definitions/response.RoomResponse'
+        type: array
+      total:
+        type: integer
+    type: object
+  response.RoomResponse:
+    properties:
+      room_num:
+        type: integer
+      room_type:
+        $ref: '#/definitions/response.RoomTypeResponse'
+      type_id:
+        type: integer
+    type: object
+  response.RoomStatusInfo:
+    properties:
+      booking_id:
+        type: integer
+      check_in:
+        type: string
+      check_out:
+        type: string
+      status:
+        type: string
+    type: object
+  response.RoomTypeListResponse:
+    properties:
+      last_page:
+        type: integer
+      page:
+        type: integer
+      room_types:
+        items:
+          $ref: '#/definitions/response.RoomTypeResponse'
+        type: array
+      total:
+        type: integer
+    type: object
+  response.RoomTypeResponse:
+    properties:
+      area:
+        type: integer
+      capacity:
+        type: integer
+      description:
+        type: string
+      facility:
+        type: string
+      highlight:
+        type: string
+      name:
+        type: string
+      price_per_night:
+        type: integer
+      type_id:
+        type: integer
+    type: object
+  response.SuccessResponse:
+    properties:
+      data: {}
+      message:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: Hotel Booking System API
+  title: Hotel Booking System API
+  version: "1.0"
+paths:
+  /bookings:
+    get:
+      consumes:
+      - application/json
+      description: Get a list of bookings with optional filters
+      parameters:
+      - description: Filter by guest ID
+        in: query
+        name: guest_id
+        type: integer
+      - description: Filter by room number
+        in: query
+        name: room_num
+        type: integer
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.BookingListResponse'
+      summary: List bookings
+      tags:
+      - bookings
+    post:
+      consumes:
+      - application/json
+      description: Create a new room booking with concurrent handling
+      parameters:
+      - description: Booking details
+        in: body
+        name: booking
+        required: true
+        schema:
+          $ref: '#/definitions/request.CreateBookingRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.BookingResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Create a new booking
+      tags:
+      - bookings
+  /bookings/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get details of a specific booking
+      parameters:
+      - description: Booking ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.BookingDetailResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Get booking details
+      tags:
+      - bookings
+  /bookings/{id}/cancel:
+    post:
+      consumes:
+      - application/json
+      description: Cancel an existing booking
+      parameters:
+      - description: Booking ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Cancel booking
+      tags:
+      - bookings
+  /bookings/check-availability:
+    post:
+      consumes:
+      - application/json
+      description: Check if a room is available for specific dates
+      parameters:
+      - description: Availability check details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.CheckAvailabilityRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.BookingAvailabilityResponse'
+      summary: Check room availability
+      tags:
+      - bookings
+  /guests:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of guests
+      parameters:
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.GuestListResponse'
+      summary: List guests
+      tags:
+      - guests
+    post:
+      consumes:
+      - application/json
+      description: Register a new guest in the system
+      parameters:
+      - description: Guest details
+        in: body
+        name: guest
+        required: true
+        schema:
+          $ref: '#/definitions/request.CreateGuestRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.GuestResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Create a new guest
+      tags:
+      - guests
+  /guests/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get details of a specific guest
+      parameters:
+      - description: Guest ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.GuestDetailResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Get guest details
+      tags:
+      - guests
+    put:
+      consumes:
+      - application/json
+      description: Update an existing guest's information
+      parameters:
+      - description: Guest ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Guest details
+        in: body
+        name: guest
+        required: true
+        schema:
+          $ref: '#/definitions/request.UpdateGuestRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.GuestResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Update guest information
+      tags:
+      - guests
+  /guests/{id}/bookings:
+    get:
+      consumes:
+      - application/json
+      description: Get the booking history for a specific guest
+      parameters:
+      - description: Guest ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.GuestBookingHistoryResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Get guest booking history
+      tags:
+      - guests
+  /rooms:
+    get:
+      consumes:
+      - application/json
+      description: Get a list of rooms with optional type filter
+      parameters:
+      - description: Filter by room type
+        in: query
+        name: type_id
+        type: integer
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.RoomListResponse'
+      summary: List rooms
+      tags:
+      - rooms
+    post:
+      consumes:
+      - application/json
+      description: Create a new room with specified type
+      parameters:
+      - description: Room details
+        in: body
+        name: room
+        required: true
+        schema:
+          $ref: '#/definitions/request.CreateRoomRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.RoomResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Create a new room
+      tags:
+      - rooms
+  /rooms/{room_num}:
+    get:
+      consumes:
+      - application/json
+      description: Get details of a specific room
+      parameters:
+      - description: Room Number
+        in: path
+        name: room_num
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.RoomDetailResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Get room details
+      tags:
+      - rooms
+  /rooms/available:
+    post:
+      consumes:
+      - application/json
+      description: Get a list of available rooms for specific dates
+      parameters:
+      - description: Availability request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.GetAvailableRoomsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/response.RoomAvailabilityResponse'
+            type: array
+      summary: List available rooms
+      tags:
+      - rooms
+  /rooms/types:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of room types
+      parameters:
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.RoomTypeListResponse'
+      summary: List room types
+      tags:
+      - room-types
+    post:
+      consumes:
+      - application/json
+      description: Create a new room type with the provided details
+      parameters:
+      - description: Room Type details
+        in: body
+        name: roomType
+        required: true
+        schema:
+          $ref: '#/definitions/request.CreateRoomTypeRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.RoomTypeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Create a new room type
+      tags:
+      - room-types
+  /rooms/types/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get details of a specific room type
+      parameters:
+      - description: Room Type ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.RoomTypeResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Get room type details
+      tags:
+      - room-types
+    put:
+      consumes:
+      - application/json
+      description: Update an existing room type's details
+      parameters:
+      - description: Room Type ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Room Type details
+        in: body
+        name: roomType
+        required: true
+        schema:
+          $ref: '#/definitions/request.UpdateRoomTypeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.RoomTypeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Update room type
+      tags:
+      - room-types
+swagger: "2.0"

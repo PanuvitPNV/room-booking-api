@@ -32,11 +32,11 @@ type GetRoomStatusRequest struct {
 type CreateRoomTypeRequest struct {
 	Name          string `json:"name" validate:"required"`
 	Description   string `json:"description"`
-	Area          int    `json:"area" validate:"required"`
+	Area          int    `json:"area" validate:"required,gt=0"`
 	Highlight     string `json:"highlight"`
 	Facility      string `json:"facility"`
-	PricePerNight int    `json:"price_per_night" validate:"required"`
-	Capacity      int    `json:"capacity" validate:"required"`
+	PricePerNight int    `json:"price_per_night" validate:"required,gt=0"`
+	Capacity      int    `json:"capacity" validate:"required,gt=0"`
 }
 
 // UpdateRoomTypeRequest aligns with RoomTypeRepository.Update
