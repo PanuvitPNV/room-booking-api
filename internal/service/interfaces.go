@@ -74,16 +74,17 @@ type TransactionManager interface {
 
 // Common errors
 var (
-	ErrRoomNotAvailable  = errors.New("room not available for the selected dates")
-	ErrInvalidDateRange  = errors.New("invalid date range")
-	ErrBookingNotFound   = errors.New("booking not found")
-	ErrGuestNotFound     = errors.New("guest not found")
-	ErrRoomNotFound      = errors.New("room not found")
-	ErrRoomTypeNotFound  = errors.New("room type not found")
-	ErrDuplicateRoom     = errors.New("room already exists")
-	ErrDuplicateGuest    = errors.New("guest already exists")
-	ErrInvalidData       = errors.New("invalid data")
-	ErrTransactionFailed = errors.New("transaction failed")
+	ErrRoomNotAvailable   = errors.New("room not available for the selected dates")
+	ErrInvalidDateRange   = errors.New("invalid date range")
+	ErrBookingNotFound    = errors.New("booking not found")
+	ErrGuestNotFound      = errors.New("guest not found")
+	ErrRoomNotFound       = errors.New("room not found")
+	ErrRoomTypeNotFound   = errors.New("room type not found")
+	ErrDuplicateRoom      = errors.New("room already exists")
+	ErrDuplicateGuest     = errors.New("guest already exists")
+	ErrInvalidData        = errors.New("invalid data")
+	ErrTransactionFailed  = errors.New("transaction failed")
+	ErrRoomStatusNotFound = errors.New("room status not found")
 )
 
 // Status constants
