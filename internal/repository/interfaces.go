@@ -1,4 +1,3 @@
-// internal/repository/interfaces.go
 package repository
 
 import (
