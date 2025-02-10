@@ -5,59 +5,86 @@ A Go-based API for managing hotel room bookings using Echo framework and GORM.
 
 ## Project Structure
 ```
-├── cmd/
-│   └── server/
-│       └── main.go
-├── internal/
-│   ├── config/
-│   │   └── config.go
-│   ├── models/
-│   │   └── models.go
-│   ├── handlers/
-│   │   └── booking.go
-│   ├── repository/
-│   │   └── booking.go
-│   ├── service/
-│   │   └── booking.go
-│   └── utils/
-│       └── errors.go
-├── pkg/
-│   ├── database/
-│   │   └── db.go
-│   ├── migration/
-│   │   └── migration.go
-│   ├── seeder/
-│   │   └── seeder.go
-│   └── test/
-│       └── test.go
+├── README.md
+├── artillery
+│   ├── booking-test.yml
+│   ├── complex-test.yml
+│   ├── logger_test.sh
+│   ├── realistic-booking-test.yml
+│   └── test-data.csv
+├── cmd
+│   └── main.go
+├── docs
+│   ├── docs.go
+│   ├── swagger.json
+│   └── swagger.yaml
 ├── go.mod
 ├── go.sum
-└── README.md
+├── internal
+│   ├── config
+│   │   ├── config.go
+│   │   └── config.yaml
+│   ├── dto
+│   │   ├── request
+│   │   │   ├── booking_request.go
+│   │   │   ├── guest_request.go
+│   │   │   ├── request_parser.go
+│   │   │   └── room_request.go
+│   │   └── response
+│   │       ├── booking_response.go
+│   │       ├── common_response.go
+│   │       ├── guest_response.go
+│   │       └── room_response.go
+│   ├── errors
+│   │   ├── errors.go
+│   │   ├── handler.go
+│   │   └── logger.go
+│   ├── handlers
+│   │   ├── booking_handler.go
+│   │   ├── converter.go
+│   │   ├── guest_handler.go
+│   │   └── room_handler.go
+│   ├── models
+│   │   └── models.go
+│   ├── repository
+│   │   ├── booking_repository.go
+│   │   ├── guest_repository.go
+│   │   ├── interfaces.go
+│   │   ├── room_repository.go
+│   │   ├── room_status_repository.go
+│   │   └── room_type_repository.go
+│   ├── routes
+│   │   └── routes.go
+│   ├── server
+│   │   └── server.go
+│   ├── service
+│   │   ├── booking_service.go
+│   │   ├── guest_service.go
+│   │   ├── interfaces.go
+│   │   ├── room_service.go
+│   │   ├── room_status_service.go
+│   │   └── room_type_service.go
+│   ├── test
+│   │   └── helper.go
+│   ├── utils
+│   └── validators
+│       ├── request_validators.go
+│       ├── validation_rules.go
+│       └── validator.go
+├── logs
+│   └── {logs_file}.log
+└── pkg
+    ├── databases
+    │   ├── database.go
+    │   └── postgresDatabase.go
+    ├── migration
+    │   └── migration.go
+    ├── seeder
+    │   └── seeder.go
+    └── test
+        └── test.go
 ```
 
 ## Setup and Installation
 
-1. Clone the repository
-```bash
-git clone <your-repository-url>
-```
-
-2. Install dependencies
-```bash
-go mod tidy
-```
-
-3. Run database migration
-```bash
-go run pkg/migration/migration.go
-```
-
-4. Seed sample data
-```bash
-go run pkg/seeder/seeder.go
-```
-
-5. Run tests
-```bash
-go run pkg/test/test.go
-```
+To set up and run the Hotel Room Booking API, follow the instructions below:
