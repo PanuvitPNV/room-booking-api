@@ -1,0 +1,51 @@
+config:
+  target: "http://localhost:8080"
+  phases:
+    - duration: 60
+      arrivalRate: 2
+      rampTo: 5
+      name: "Ramp up booking requests"
+  plugins:
+    expect: {}
+
+scenarios:
+  - name: "Booking workflow with realistic timing"
+    flow:
+      # Simulate user checking availability
+      - post:
+          url: "/v1/bookings/check-availability"
+          json:
+            room_num: 201
+            check_in_date: "2025-03-01T14:00:00Z"
+            check_out_date: "2025-03-05T12:00:00Z"
+          expect:
+            - statusCode: 200
+
+      # Simulate user thinking about the available room
+      - think: 5
+
+      # Try to create booking
+      - post:
+          url: "/v1/bookings"
+          json:
+            room_num: 201
+            guest_id: 1
+            check_in_date: "2025-03-01T14:00:00Z"
+            check_out_date: "2025-03-05T12:00:00Z"
+          capture:
+            - json: "$.booking_id"
+              as: "bookingId"
+          expect:
+            - statusCode: [201, 409]
+
+      # Wait a bit before checking booking status
+      - think: 3
+
+      # Check booking details
+      - get:
+          url: "/v1/bookings/{{ bookingId }}"
+          expect:
+            - statusCode: 200
+
+      # Add longer pause between user sessions
+      - think: 10

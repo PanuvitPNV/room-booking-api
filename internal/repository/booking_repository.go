@@ -40,6 +40,9 @@ func (r *bookingRepository) Create(ctx context.Context, booking *models.Booking)
 			TotalPrice:   booking.TotalPrice,
 		}
 
+		// Simulate concurrency by holding for 2 seconds
+		time.Sleep(2 * time.Second)
+
 		// Create booking
 		if err := db.Create(bookingToCreate).Error; err != nil {
 			return err

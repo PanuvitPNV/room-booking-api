@@ -1,0 +1,34 @@
+config:
+  target: "http://localhost:8080"
+  phases:
+    - duration: 60
+      arrivalRate: 5
+      name: "Concurrent booking test"
+  payload:
+    # Create different guest IDs and room numbers
+    - path: "test-data.csv"
+      fields:
+        - "guestId"
+        - "roomNum"
+  plugins:
+    ensure: {}
+
+scenarios:
+  - name: "Book rooms concurrently"
+    flow:
+      - post:
+          url: "/v1/bookings"
+          json:
+            room_num: "{{ roomNum }}"
+            guest_id: "{{ guestId }}"
+            check_in_date: "2025-03-01T14:00:00Z"
+            check_out_date: "2025-03-05T12:00:00Z"
+          capture:
+            - json: "$.booking_id"
+              as: "bookingId"
+      
+      # Check booking status
+      - get:
+          url: "/v1/bookings/{{ bookingId }}"
+          expect:
+            - statusCode: 200

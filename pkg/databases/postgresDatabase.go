@@ -2,8 +2,10 @@ package databases
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/panuvitpnv/room-booking-api/internal/config"
 	"gorm.io/driver/postgres"
@@ -33,9 +35,21 @@ func NewPostgresDatabase(conf *config.Database) Database {
 			conf.Schema,
 		)
 
+		// Configure GORM logger
+		newLogger := logger.New(
+			log.New(io.Discard, "", log.LstdFlags), // Use io.Discard to disable logging
+			logger.Config{
+				SlowThreshold:             time.Second,   // Slow SQL threshold
+				LogLevel:                  logger.Silent, // Set to Silent to disable all SQL logging
+				IgnoreRecordNotFoundError: true,          // Ignore not found errors
+				Colorful:                  false,         // Disable color
+			},
+		)
+
 		gormConfig := &gorm.Config{
 			DisableForeignKeyConstraintWhenMigrating: true, // Disable during migration
-			Logger:                                   logger.Default.LogMode(logger.Info),
+			// Logger:                                   logger.Default.LogMode(logger.Info),
+			Logger: newLogger,
 		}
 
 		conn, err := gorm.Open(postgres.Open(dsn), gormConfig)
