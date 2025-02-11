@@ -1,0 +1,123 @@
+version: '3.8'
+name: cs-hotel
+services:
+  app:
+    container_name: cs-hotel-app
+    build: 
+      context: ..
+      dockerfile: .docker/Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USER=postgres
+      - DATABASE_DBNAME=cshotel
+      - DATABASE_PASSWORD=1234
+      - DATABASE_SSLMODE=disable
+      - DATABASE_SCHEMA=public
+      - SERVER_PORT=8080
+      - SERVER_ALLOWORIGINS=*
+      - SERVER_BODYLIMIT=10M
+      - SERVER_TIMEOUT=30
+      - OAUTH2_PLAYERREDIRECTURL=http://localhost:8080/v1/oauth2/google/player/login/callback
+      - OAUTH2_ADMINREDIRECTURL=http://localhost:8080/v1/oauth2/google/admin/login/callback
+      - OAUTH2_CLIENTID=xxxxx.apps.googleusercontent.com
+      - OAUTH2_CLIENTSECRET=xxxxx
+      - OAUTH2_ENDPOINTS_AUTHURL=https://accounts.google.com/o/oauth2/auth?access_type=offline&approval_prompt=force
+      - OAUTH2_ENDPOINTS_TOKENURL=https://oauth2.googleapis.com/token
+      - OAUTH2_ENDPOINTS_DEVICEAUTHURL=https://oauth2.googleapis.com/device/code
+      - OAUTH2_USERINFOURL=https://www.googleapis.com/oauth2/v2/userinfo
+      - OAUTH2_REVOKEURL=https://accounts.google.com/o/oauth2/revoke
+      - OAUTH2_SCOPES=https://www.googleapis.com/auth/userinfo.email,https://www.googleapis.com/auth/userinfo.profile
+    volumes:
+      - ../internal/config:/app/internal/config
+      - ../logs:/app/logs
+    networks:
+      - hotel-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  postgres:
+    container_name: cs-hotel-postgres
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=1234
+      - POSTGRES_DB=cshotel
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - hotel-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  swagger:
+    image: swaggerapi/swagger-ui
+    ports:
+      - "8081:8080"
+    environment:
+      - SWAGGER_JSON=/swagger/swagger.json
+    volumes:
+      - ./docs:/swagger
+    networks:
+      - hotel-network
+
+  migration:
+    container_name: cs-hotel-migration
+    build:
+      context: ..
+      dockerfile: .docker/Dockerfile.migration
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=1234
+      - DATABASE_DBNAME=cshotel
+      - DATABASE_SSLMODE=disable
+      - DATABASE_SCHEMA=public
+      - PGPASSWORD=1234  # Add this line
+    networks:
+      - hotel-network
+
+  seeder:
+    container_name: cs-hotel-seeder
+    build:
+      context: ..
+      dockerfile: .docker/Dockerfile.seeder
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+    environment:
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=1234
+      - DATABASE_DBNAME=cshotel
+      - DATABASE_SSLMODE=disable
+      - DATABASE_SCHEMA=public
+    networks:
+      - hotel-network
+
+networks:
+  hotel-network:
+    name: cs-hotel-network
+    driver: bridge
+
+volumes:
+  postgres_data:
+    name: cs-hotel-postgres-data

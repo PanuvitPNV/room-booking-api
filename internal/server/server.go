@@ -134,7 +134,10 @@ func (s *echoServer) gracefullyShutdown(quitCh chan os.Signal) {
 }
 
 func (s *echoServer) healthCheck(c echo.Context) error {
-	return c.String(http.StatusOK, "OK")
+	return c.JSON(http.StatusOK, map[string]string{
+		"status": "ok",
+		"time":   time.Now().Format(time.RFC3339),
+	})
 }
 
 // Keep your existing middleware functions

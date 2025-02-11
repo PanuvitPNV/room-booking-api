@@ -6,11 +6,20 @@ import (
 	"github.com/panuvitpnv/room-booking-api/pkg/databases"
 )
 
-// @Title         Hotel Booking System API
-// @Version       1.0
-// @Description   Hotel Booking System API
-// @Host          localhost:8080
-// @BasePath      /v1
+// @title Hotel Booking API
+// @version 1.0
+// @description This is a hotel room booking server.
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.url http://www.swagger.io/support
+// @contact.email support@swagger.io
+
+// @license.name Apache 2.0
+// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host localhost:8080
+// @BasePath /v1
 func main() {
 	conf := config.ConfigGetting()
 	db := databases.NewPostgresDatabase(conf.Database)

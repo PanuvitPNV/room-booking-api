@@ -1,6 +1,8 @@
 package config
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -69,7 +71,16 @@ func ConfigGetting() *Config {
 		viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
 		if err := viper.ReadInConfig(); err != nil {
-			panic(err)
+			fmt.Println("Warning: No config.yaml found, using environment variables.")
+		}
+
+		// Convert SERVER_TIMEOUT to int before unmarshaling
+		if timeoutStr := viper.GetString("SERVER_TIMEOUT"); timeoutStr != "" {
+			if timeoutInt, err := strconv.Atoi(timeoutStr); err == nil {
+				viper.Set("server.timeout", timeoutInt)
+			} else {
+				panic(fmt.Sprintf("Invalid SERVER_TIMEOUT: %v", err))
+			}
 		}
 
 		if err := viper.Unmarshal(&configInstance); err != nil {

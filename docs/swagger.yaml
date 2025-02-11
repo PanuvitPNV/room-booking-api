@@ -364,9 +364,16 @@ definitions:
     type: object
 host: localhost:8080
 info:
-  contact: {}
-  description: Hotel Booking System API
-  title: Hotel Booking System API
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: This is a hotel room booking server.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Hotel Booking API
   version: "1.0"
 paths:
   /bookings:
