@@ -2,55 +2,81 @@ package models
 
 import "time"
 
-// RoomType has no foreign key dependencies
+// RoomType represents different types of rooms available in the hotel
 type RoomType struct {
-	TypeID        int    `gorm:"primaryKey;column:type_id" json:"type_id"`
-	Name          string `gorm:"unique;not null" json:"name" validate:"required"`
-	Description   string `json:"description"`
-	Area          int    `gorm:"not null" json:"area" validate:"required"`
-	Highlight     string `json:"highlight"`
-	Facility      string `json:"facility"`
-	PricePerNight int    `gorm:"not null" json:"price_per_night" validate:"required"`
-	Capacity      int    `gorm:"not null" json:"capacity" validate:"required"`
-	Rooms         []Room `gorm:"foreignKey:TypeID" json:"rooms,omitempty"` // Add this line
+	TypeID         int            `gorm:"primaryKey;column:type_id" json:"type_id"`
+	Name           string         `gorm:"unique;not null" json:"name"`
+	Description    string         `json:"description"`
+	Area           int            `gorm:"not null" json:"area"`
+	PricePerNight  int            `gorm:"not null;column:price_per_night" json:"price_per_night"`
+	NoOfGuest      int            `gorm:"not null;column:no_of_guest" json:"noOfGuest"`
+	Rooms          []Room         `gorm:"foreignKey:TypeID" json:"rooms,omitempty"`
+	RoomFacilities []RoomFacility `gorm:"foreignKey:TypeID" json:"room_facilities,omitempty"`
 }
 
-// Room depends on RoomType
+// Facility represents amenities available in rooms
+type Facility struct {
+	FacilityID     int            `gorm:"primaryKey;column:fac_id" json:"fac_id"`
+	Name           string         `gorm:"unique;not null" json:"name"`
+	RoomFacilities []RoomFacility `gorm:"foreignKey:FacilityID" json:"room_facilities,omitempty"`
+}
+
+// RoomFacility maps facilities to room types
+type RoomFacility struct {
+	TypeID     int      `gorm:"primaryKey;column:type_id" json:"type_id"`
+	FacilityID int      `gorm:"primaryKey;column:fac_id" json:"fac_id"`
+	RoomType   RoomType `gorm:"foreignKey:TypeID;references:TypeID" json:"-"`
+	Facility   Facility `gorm:"foreignKey:FacilityID;references:FacilityID" json:"-"`
+}
+
+// Room represents an actual room in the hotel
 type Room struct {
-	RoomNum  int      `gorm:"primaryKey;column:room_num" json:"room_num"`
-	TypeID   int      `gorm:"not null" json:"type_id" validate:"required"`
-	RoomType RoomType `gorm:"foreignKey:TypeID;references:TypeID" json:"room_type"`
+	RoomNum  int          `gorm:"primaryKey;column:room_num" json:"room_num"`
+	TypeID   int          `gorm:"not null" json:"type_id"`
+	RoomType RoomType     `gorm:"foreignKey:TypeID;references:TypeID" json:"room_type,omitempty"`
+	Bookings []Booking    `gorm:"foreignKey:RoomNum" json:"bookings,omitempty"`
+	Statuses []RoomStatus `gorm:"foreignKey:RoomNum" json:"statuses,omitempty"`
 }
 
-// Guest has no foreign key dependencies
-type Guest struct {
-	GuestID     int       `gorm:"primaryKey;column:guest_id" json:"guest_id"`
-	FirstName   string    `gorm:"column:f_name;not null" json:"f_name" validate:"required"`
-	LastName    string    `gorm:"column:l_name;not null" json:"l_name" validate:"required"`
-	DateOfBirth time.Time `gorm:"not null" json:"date_of_birth" validate:"required"`
-	Email       string    `gorm:"unique;not null" json:"email" validate:"required,email"`
-	Phone       string    `gorm:"unique;not null" json:"phone" validate:"required"`
-	Bookings    []Booking `gorm:"foreignKey:GuestID" json:"bookings,omitempty"` // Add this line
-}
-
-// Booking depends on Room and Guest
+// Booking represents a reservation for a room
 type Booking struct {
-	BookingID    int       `gorm:"primaryKey;column:booking_id" json:"booking_id"`
-	RoomNum      int       `gorm:"not null" json:"room_num" validate:"required"`
-	GuestID      int       `gorm:"not null" json:"guest_id" validate:"required"`
-	CheckInDate  time.Time `gorm:"not null" json:"check_in_date" validate:"required"`
-	CheckOutDate time.Time `gorm:"not null" json:"check_out_date" validate:"required"`
-	TotalPrice   int       `gorm:"not null" json:"total_price"`
-	Room         Room      `gorm:"foreignKey:RoomNum;references:RoomNum" json:"room"`
-	Guest        Guest     `gorm:"foreignKey:GuestID" json:"guest"`
+	BookingID    int          `gorm:"primaryKey;column:booking_id" json:"booking_id"`
+	BookingName  string       `gorm:"column:booking_name;not null" json:"booking_name" validate:"required"`
+	RoomNum      int          `gorm:"not null" json:"room_num" validate:"required"`
+	CheckInDate  time.Time    `gorm:"not null;column:check_in_date" json:"check_in_date" validate:"required"`
+	CheckOutDate time.Time    `gorm:"not null;column:check_out_date" json:"check_out_date" validate:"required"`
+	BookingDate  time.Time    `gorm:"not null;column:booking_date;default:CURRENT_TIMESTAMP" json:"booking_date"`
+	TotalPrice   int          `gorm:"not null;column:total_price" json:"total_price"`
+	CreatedAt    time.Time    `gorm:"autoCreateTime" json:"-"`
+	UpdatedAt    time.Time    `gorm:"autoUpdateTime" json:"-"`
+	Room         Room         `gorm:"foreignKey:RoomNum;references:RoomNum" json:"room,omitempty"`
+	Receipt      *Receipt     `gorm:"foreignKey:BookingID" json:"receipt,omitempty"`
+	Statuses     []RoomStatus `gorm:"foreignKey:BookingID" json:"statuses,omitempty"`
 }
 
-// RoomStatus depends on Room and Booking
+// Receipt represents payment confirmation for a booking
+type Receipt struct {
+	ReceiptID     int       `gorm:"primaryKey;column:receipt_id" json:"receipt_id"`
+	BookingID     int       `gorm:"not null;column:booking_id" json:"booking_id"`
+	PaymentDate   time.Time `gorm:"not null;column:payment_date" json:"payment_date"`
+	PaymentMethod string    `gorm:"column:payment_method;not null" json:"payment_method" validate:"required,oneof=Credit Debit Bank Transfer"`
+	Amount        int       `gorm:"not null;column:amount" json:"amount" validate:"required"`
+	IssueDate     time.Time `gorm:"not null;column:issue_date;default:CURRENT_TIMESTAMP" json:"issue_date"`
+	Booking       Booking   `gorm:"foreignKey:BookingID;references:BookingID" json:"-"`
+}
+
+// RoomStatus represents the availability status of a room on a specific date
 type RoomStatus struct {
 	RoomNum   int       `gorm:"primaryKey;column:room_num" json:"room_num"`
-	Calendar  time.Time `gorm:"primaryKey;type:date" json:"calendar"`
-	Status    string    `gorm:"not null;default:Available" json:"status" validate:"required,oneof=Available Occupied"`
-	BookingID *int      `json:"booking_id"`
-	Room      Room      `gorm:"foreignKey:RoomNum;references:RoomNum"`
-	Booking   *Booking  `gorm:"foreignKey:BookingID;references:BookingID"`
+	Calendar  time.Time `gorm:"primaryKey;column:calendar;type:date" json:"calendar"`
+	Status    string    `gorm:"not null;column:status;default:Available" json:"status" validate:"required,oneof=Available Occupied"`
+	BookingID *int      `gorm:"column:booking_id" json:"booking_id"`
+	Room      Room      `gorm:"foreignKey:RoomNum;references:RoomNum" json:"-"`
+	Booking   *Booking  `gorm:"foreignKey:BookingID;references:BookingID" json:"booking,omitempty"`
+}
+
+// LastRunning stores the last used running number for ID generation
+type LastRunning struct {
+	LastRunning int `gorm:"primaryKey;column:last_running" json:"last_running"`
+	Year        int `gorm:"column:year" json:"year"`
 }

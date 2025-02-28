@@ -1,0 +1,26 @@
+{
+  "name": "room-booking-api",
+  "version": "1.0.0",
+  "description": "A Go-based API for managing hotel room bookings using Echo framework and GORM.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PanuvitPNV/room-booking-api.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/PanuvitPNV/room-booking-api/issues"
+  },
+  "homepage": "https://github.com/PanuvitPNV/room-booking-api#readme",
+  "dependencies": {
+    "moment": "^2.30.1"
+  }
+}

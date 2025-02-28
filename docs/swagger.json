@@ -1,7 +1,7 @@
 {
     "swagger": "2.0",
     "info": {
-        "description": "This is a hotel room booking server.",
+        "description": "This is a hotel room booking server with transaction management and concurrency control.",
         "title": "Hotel Booking API",
         "termsOfService": "http://swagger.io/terms/",
         "contact": {
@@ -16,11 +16,11 @@
         "version": "1.0"
     },
     "host": "localhost:8080",
-    "basePath": "/v1",
+    "basePath": "/api",
     "paths": {
         "/bookings": {
             "get": {
-                "description": "Get a list of bookings with optional filters",
+                "description": "Find rooms available for booking in a specific date range and guest count",
                 "consumes": [
                     "application/json"
                 ],
@@ -30,96 +30,64 @@
                 "tags": [
                     "bookings"
                 ],
-                "summary": "List bookings",
+                "summary": "Search for available rooms",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Filter by guest ID",
-                        "name": "guest_id",
-                        "in": "query"
+                        "type": "string",
+                        "description": "Check-in date (YYYY-MM-DD)",
+                        "name": "checkIn",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Check-out date (YYYY-MM-DD)",
+                        "name": "checkOut",
+                        "in": "query",
+                        "required": true
                     },
                     {
                         "type": "integer",
-                        "description": "Filter by room number",
-                        "name": "room_num",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Page number",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Items per page",
-                        "name": "page_size",
-                        "in": "query"
+                        "description": "Number of guests",
+                        "name": "guests",
+                        "in": "query",
+                        "required": true
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/response.BookingListResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "description": "Create a new room booking with concurrent handling",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "bookings"
-                ],
-                "summary": "Create a new booking",
-                "parameters": [
-                    {
-                        "description": "Booking details",
-                        "name": "booking",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/request.CreateBookingRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/response.BookingResponse"
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.Room"
+                            }
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
             }
         },
         "/bookings/check-availability": {
-            "post": {
-                "description": "Check if a room is available for specific dates",
+            "get": {
+                "description": "Check if a specific room is available for a date range",
                 "consumes": [
                     "application/json"
                 ],
@@ -132,20 +100,94 @@
                 "summary": "Check room availability",
                 "parameters": [
                     {
-                        "description": "Availability check details",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/request.CheckAvailabilityRequest"
-                        }
+                        "type": "integer",
+                        "description": "Room number",
+                        "name": "roomNum",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Check-in date (YYYY-MM-DD)",
+                        "name": "checkIn",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Check-out date (YYYY-MM-DD)",
+                        "name": "checkOut",
+                        "in": "query",
+                        "required": true
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/response.BookingAvailabilityResponse"
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/bookings/with-payment": {
+            "post": {
+                "description": "Create a new booking with payment in a single atomic transaction. First to pay gets the room.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "bookings"
+                ],
+                "summary": "Create booking with payment",
+                "parameters": [
+                    {
+                        "description": "Booking and payment details",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.BookingWithPaymentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.BookingWithPaymentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
@@ -153,7 +195,7 @@
         },
         "/bookings/{id}": {
             "get": {
-                "description": "Get details of a specific booking",
+                "description": "Retrieve details of a specific booking by ID",
                 "consumes": [
                     "application/json"
                 ],
@@ -177,21 +219,31 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/response.BookingDetailResponse"
+                            "$ref": "#/definitions/models.Booking"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Booking not found",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
-            }
-        },
-        "/bookings/{id}/cancel": {
-            "post": {
-                "description": "Cancel an existing booking",
+            },
+            "put": {
+                "description": "Update an existing booking with transaction and concurrency control",
                 "consumes": [
                     "application/json"
                 ],
@@ -201,7 +253,163 @@
                 "tags": [
                     "bookings"
                 ],
-                "summary": "Cancel booking",
+                "summary": "Update a booking",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Booking ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated booking details",
+                        "name": "booking",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.BookingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Booking"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Cancel an existing booking and free up the room",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "bookings"
+                ],
+                "summary": "Cancel a booking",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Booking ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success message",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/demos/concurrent-bookings": {
+            "get": {
+                "description": "Demonstrates how pessimistic locking prevents double booking",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "demos"
+                ],
+                "summary": "Concurrent Booking Demo",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Room number",
+                        "name": "roomNum",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Check-in date (YYYY-MM-DD)",
+                        "name": "checkIn",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Check-out date (YYYY-MM-DD)",
+                        "name": "checkOut",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.DemoResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/demos/dirty-read/{id}": {
+            "get": {
+                "description": "Demonstrates the dirty read problem in database transactions",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "demos"
+                ],
+                "summary": "Dirty Read Demo",
                 "parameters": [
                     {
                         "type": "integer",
@@ -215,21 +423,33 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/response.SuccessResponse"
+                            "$ref": "#/definitions/handlers.DemoResponse"
                         }
                     },
-                    "404": {
-                        "description": "Not Found",
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
             }
         },
-        "/guests": {
+        "/demos/lost-update-with-locking/{id}": {
             "get": {
-                "description": "Get a paginated list of guests",
+                "description": "Demonstrates how pessimistic locking prevents lost updates",
                 "consumes": [
                     "application/json"
                 ],
@@ -237,34 +457,49 @@
                     "application/json"
                 ],
                 "tags": [
-                    "guests"
+                    "demos"
                 ],
-                "summary": "List guests",
+                "summary": "Lost Update Prevention Demo",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "Page number",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Items per page",
-                        "name": "page_size",
-                        "in": "query"
+                        "description": "Booking ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/response.GuestListResponse"
+                            "$ref": "#/definitions/handlers.DemoResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
-            },
-            "post": {
-                "description": "Register a new guest in the system",
+            }
+        },
+        "/demos/lost-update/{id}": {
+            "get": {
+                "description": "Demonstrates the lost update problem in concurrent transactions",
                 "consumes": [
                     "application/json"
                 ],
@@ -272,17 +507,241 @@
                     "application/json"
                 ],
                 "tags": [
-                    "guests"
+                    "demos"
                 ],
-                "summary": "Create a new guest",
+                "summary": "Lost Update Demo",
                 "parameters": [
                     {
-                        "description": "Guest details",
-                        "name": "guest",
+                        "type": "integer",
+                        "description": "Booking ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.DemoResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/demos/phantom-read": {
+            "get": {
+                "description": "Demonstrates the phantom read problem in database transactions",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "demos"
+                ],
+                "summary": "Phantom Read Demo",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Check-in date (YYYY-MM-DD)",
+                        "name": "checkIn",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Check-out date (YYYY-MM-DD)",
+                        "name": "checkOut",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.DemoResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/demos/serialization-anomaly": {
+            "get": {
+                "description": "Demonstrates serialization anomaly in database transactions",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "demos"
+                ],
+                "summary": "Serialization Anomaly Demo",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.DemoResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/facilities": {
+            "get": {
+                "description": "Retrieve all room facilities",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "facilities"
+                ],
+                "summary": "Get all facilities",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.Facility"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/facilities/{id}": {
+            "get": {
+                "description": "Retrieve a specific facility",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "facilities"
+                ],
+                "summary": "Get a facility by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Facility ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Facility"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/receipts": {
+            "post": {
+                "description": "Create a payment receipt for a booking with transaction control",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "receipts"
+                ],
+                "summary": "Create a new receipt",
+                "parameters": [
+                    {
+                        "description": "Receipt details",
+                        "name": "receipt",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/request.CreateGuestRequest"
+                            "$ref": "#/definitions/handlers.ReceiptRequest"
                         }
                     }
                 ],
@@ -290,21 +749,24 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/response.GuestResponse"
+                            "$ref": "#/definitions/models.Receipt"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
             }
         },
-        "/guests/{id}": {
+        "/receipts/booking/{bookingId}": {
             "get": {
-                "description": "Get details of a specific guest",
+                "description": "Retrieve a receipt associated with a specific booking",
                 "consumes": [
                     "application/json"
                 ],
@@ -312,13 +774,63 @@
                     "application/json"
                 ],
                 "tags": [
-                    "guests"
+                    "receipts"
                 ],
-                "summary": "Get guest details",
+                "summary": "Get receipt by booking ID",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "Guest ID",
+                        "description": "Booking ID",
+                        "name": "bookingId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Receipt"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Receipt not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/receipts/{id}": {
+            "get": {
+                "description": "Retrieve a receipt by its ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "receipts"
+                ],
+                "summary": "Get receipt by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Receipt ID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -328,19 +840,31 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/response.GuestDetailResponse"
+                            "$ref": "#/definitions/models.Receipt"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Receipt not found",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
             },
             "put": {
-                "description": "Update an existing guest's information",
+                "description": "Update an existing receipt with transaction control",
                 "consumes": [
                     "application/json"
                 ],
@@ -348,24 +872,24 @@
                     "application/json"
                 ],
                 "tags": [
-                    "guests"
+                    "receipts"
                 ],
-                "summary": "Update guest information",
+                "summary": "Update a receipt",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "Guest ID",
+                        "description": "Receipt ID",
                         "name": "id",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "Guest details",
-                        "name": "guest",
+                        "description": "Updated receipt details",
+                        "name": "receipt",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/request.UpdateGuestRequest"
+                            "$ref": "#/definitions/handlers.ReceiptRequest"
                         }
                     }
                 ],
@@ -373,27 +897,75 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/response.GuestResponse"
+                            "$ref": "#/definitions/models.Receipt"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Receipt not found",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Delete an existing receipt with transaction control",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "receipts"
+                ],
+                "summary": "Delete a receipt",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Receipt ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success message",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
             }
         },
-        "/guests/{id}/bookings": {
+        "/room-types": {
             "get": {
-                "description": "Get the booking history for a specific guest",
+                "description": "Retrieve all room types with their facilities",
                 "consumes": [
                     "application/json"
                 ],
@@ -401,13 +973,48 @@
                     "application/json"
                 ],
                 "tags": [
-                    "guests"
+                    "room-types"
                 ],
-                "summary": "Get guest booking history",
+                "summary": "Get all room types",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.RoomType"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/room-types/{id}": {
+            "get": {
+                "description": "Retrieve a specific room type with its facilities",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "room-types"
+                ],
+                "summary": "Get a room type by ID",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "Guest ID",
+                        "description": "Room Type ID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -417,13 +1024,25 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/response.GuestBookingHistoryResponse"
+                            "$ref": "#/definitions/models.RoomType"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
@@ -431,7 +1050,7 @@
         },
         "/rooms": {
             "get": {
-                "description": "Get a list of rooms with optional type filter",
+                "description": "Retrieve all hotel rooms with their types",
                 "consumes": [
                     "application/json"
                 ],
@@ -441,78 +1060,32 @@
                 "tags": [
                     "rooms"
                 ],
-                "summary": "List rooms",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Filter by room type",
-                        "name": "type_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Page number",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Items per page",
-                        "name": "page_size",
-                        "in": "query"
-                    }
-                ],
+                "summary": "Get all rooms",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/response.RoomListResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "description": "Create a new room with specified type",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "rooms"
-                ],
-                "summary": "Create a new room",
-                "parameters": [
-                    {
-                        "description": "Room details",
-                        "name": "room",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/request.CreateRoomRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/response.RoomResponse"
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.Room"
+                            }
                         }
                     },
-                    "400": {
-                        "description": "Bad Request",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
             }
         },
-        "/rooms/available": {
-            "post": {
-                "description": "Get a list of available rooms for specific dates",
+        "/rooms/type/{typeId}": {
+            "get": {
+                "description": "Retrieve all rooms of a specific room type",
                 "consumes": [
                     "application/json"
                 ],
@@ -522,16 +1095,14 @@
                 "tags": [
                     "rooms"
                 ],
-                "summary": "List available rooms",
+                "summary": "Get rooms by type",
                 "parameters": [
                     {
-                        "description": "Availability request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/request.GetAvailableRoomsRequest"
-                        }
+                        "type": "integer",
+                        "description": "Room Type ID",
+                        "name": "typeId",
+                        "in": "path",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -540,180 +1111,25 @@
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/response.RoomAvailabilityResponse"
+                                "$ref": "#/definitions/models.Room"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
                             }
                         }
                     }
                 }
             }
         },
-        "/rooms/types": {
+        "/rooms/{id}": {
             "get": {
-                "description": "Get a paginated list of room types",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "room-types"
-                ],
-                "summary": "List room types",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Page number",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Items per page",
-                        "name": "page_size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/response.RoomTypeListResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "description": "Create a new room type with the provided details",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "room-types"
-                ],
-                "summary": "Create a new room type",
-                "parameters": [
-                    {
-                        "description": "Room Type details",
-                        "name": "roomType",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/request.CreateRoomTypeRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/response.RoomTypeResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/rooms/types/{id}": {
-            "get": {
-                "description": "Get details of a specific room type",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "room-types"
-                ],
-                "summary": "Get room type details",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Room Type ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/response.RoomTypeResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "description": "Update an existing room type's details",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "room-types"
-                ],
-                "summary": "Update room type",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Room Type ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Room Type details",
-                        "name": "roomType",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/request.UpdateRoomTypeRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/response.RoomTypeResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/rooms/{room_num}": {
-            "get": {
-                "description": "Get details of a specific room",
+                "description": "Retrieve a specific room by its room number",
                 "consumes": [
                     "application/json"
                 ],
@@ -723,12 +1139,12 @@
                 "tags": [
                     "rooms"
                 ],
-                "summary": "Get room details",
+                "summary": "Get a room by ID",
                 "parameters": [
                     {
                         "type": "integer",
                         "description": "Room Number",
-                        "name": "room_num",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -737,13 +1153,142 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/response.RoomDetailResponse"
+                            "$ref": "#/definitions/models.Room"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/rooms/{id}/calendar": {
+            "get": {
+                "description": "Retrieve the availability calendar for a specific room",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "rooms"
+                ],
+                "summary": "Get room calendar",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Room Number",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start Date (YYYY-MM-DD)",
+                        "name": "startDate",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End Date (YYYY-MM-DD)",
+                        "name": "endDate",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.RoomStatus"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/rooms/{id}/facilities": {
+            "get": {
+                "description": "Retrieve a specific room with all its facilities",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "rooms"
+                ],
+                "summary": "Get a room with its facilities",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Room Number",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Room"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
@@ -751,551 +1296,306 @@
         }
     },
     "definitions": {
-        "request.CheckAvailabilityRequest": {
+        "handlers.BookingWithPaymentRequest": {
             "type": "object",
-            "required": [
-                "check_in_date",
-                "check_out_date",
-                "room_num"
-            ],
             "properties": {
-                "check_in_date": {
-                    "type": "string"
+                "booking": {
+                    "$ref": "#/definitions/services.BookingRequest"
                 },
-                "check_out_date": {
-                    "type": "string"
-                },
-                "room_num": {
-                    "type": "integer"
+                "payment": {
+                    "$ref": "#/definitions/services.PaymentRequest"
                 }
             }
         },
-        "request.CreateBookingRequest": {
+        "handlers.BookingWithPaymentResponse": {
             "type": "object",
-            "required": [
-                "check_in_date",
-                "check_out_date",
-                "guest_id",
-                "room_num"
-            ],
             "properties": {
-                "check_in_date": {
-                    "type": "string"
+                "booking": {
+                    "$ref": "#/definitions/models.Booking"
                 },
-                "check_out_date": {
-                    "type": "string"
-                },
-                "guest_id": {
-                    "type": "integer"
-                },
-                "room_num": {
-                    "type": "integer"
+                "receipt": {
+                    "$ref": "#/definitions/models.Receipt"
                 }
             }
         },
-        "request.CreateGuestRequest": {
+        "handlers.DemoResponse": {
             "type": "object",
-            "required": [
-                "date_of_birth",
-                "email",
-                "f_name",
-                "l_name",
-                "phone"
-            ],
             "properties": {
-                "date_of_birth": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "f_name": {
-                    "type": "string"
-                },
-                "l_name": {
-                    "type": "string"
-                },
-                "phone": {
-                    "type": "string"
-                }
-            }
-        },
-        "request.CreateRoomRequest": {
-            "type": "object",
-            "required": [
-                "room_num",
-                "type_id"
-            ],
-            "properties": {
-                "room_num": {
-                    "type": "integer"
-                },
-                "type_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "request.CreateRoomTypeRequest": {
-            "type": "object",
-            "required": [
-                "area",
-                "capacity",
-                "name",
-                "price_per_night"
-            ],
-            "properties": {
-                "area": {
-                    "type": "integer"
-                },
-                "capacity": {
-                    "type": "integer"
-                },
                 "description": {
                     "type": "string"
                 },
-                "facility": {
+                "result": {
                     "type": "string"
                 },
-                "highlight": {
+                "title": {
                     "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "price_per_night": {
-                    "type": "integer"
                 }
             }
         },
-        "request.GetAvailableRoomsRequest": {
+        "handlers.ReceiptRequest": {
             "type": "object",
             "required": [
-                "check_in_date",
-                "check_out_date"
+                "amount",
+                "booking_id",
+                "payment_date",
+                "payment_method"
             ],
             "properties": {
-                "check_in_date": {
-                    "type": "string"
+                "amount": {
+                    "type": "integer",
+                    "minimum": 1
                 },
-                "check_out_date": {
-                    "type": "string"
-                },
-                "type_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "request.UpdateGuestRequest": {
-            "type": "object",
-            "required": [
-                "guest_id"
-            ],
-            "properties": {
-                "date_of_birth": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "f_name": {
-                    "type": "string"
-                },
-                "guest_id": {
-                    "type": "integer"
-                },
-                "l_name": {
-                    "type": "string"
-                },
-                "phone": {
-                    "type": "string"
-                }
-            }
-        },
-        "request.UpdateRoomTypeRequest": {
-            "type": "object",
-            "required": [
-                "type_id"
-            ],
-            "properties": {
-                "area": {
-                    "type": "integer"
-                },
-                "capacity": {
-                    "type": "integer"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "facility": {
-                    "type": "string"
-                },
-                "highlight": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "price_per_night": {
-                    "type": "integer"
-                },
-                "type_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "response.BookingAvailabilityResponse": {
-            "type": "object",
-            "properties": {
-                "price_per_night": {
-                    "type": "integer"
-                },
-                "room_num": {
-                    "type": "integer"
-                },
-                "room_type": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                }
-            }
-        },
-        "response.BookingDetailResponse": {
-            "type": "object",
-            "properties": {
                 "booking_id": {
                     "type": "integer"
                 },
+                "payment_date": {
+                    "type": "string"
+                },
+                "payment_method": {
+                    "type": "string",
+                    "enum": [
+                        "Credit",
+                        "Debit",
+                        "Bank",
+                        "Transfer"
+                    ]
+                }
+            }
+        },
+        "models.Booking": {
+            "type": "object",
+            "required": [
+                "booking_name",
+                "check_in_date",
+                "check_out_date",
+                "room_num"
+            ],
+            "properties": {
+                "booking_date": {
+                    "type": "string"
+                },
+                "booking_id": {
+                    "type": "integer"
+                },
+                "booking_name": {
+                    "type": "string"
+                },
                 "check_in_date": {
                     "type": "string"
                 },
                 "check_out_date": {
                     "type": "string"
                 },
-                "created_at": {
-                    "type": "string"
-                },
-                "guest": {
-                    "$ref": "#/definitions/response.GuestResponse"
-                },
-                "guest_id": {
-                    "type": "integer"
+                "receipt": {
+                    "$ref": "#/definitions/models.Receipt"
                 },
                 "room": {
-                    "$ref": "#/definitions/response.RoomResponse"
+                    "$ref": "#/definitions/models.Room"
                 },
                 "room_num": {
                     "type": "integer"
                 },
-                "status": {
-                    "type": "string"
-                },
-                "total_price": {
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "response.BookingListResponse": {
-            "type": "object",
-            "properties": {
-                "bookings": {
+                "statuses": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/response.BookingResponse"
+                        "$ref": "#/definitions/models.RoomStatus"
                     }
-                },
-                "last_page": {
-                    "type": "integer"
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "response.BookingResponse": {
-            "type": "object",
-            "properties": {
-                "booking_id": {
-                    "type": "integer"
-                },
-                "check_in_date": {
-                    "type": "string"
-                },
-                "check_out_date": {
-                    "type": "string"
-                },
-                "guest": {
-                    "$ref": "#/definitions/response.GuestResponse"
-                },
-                "guest_id": {
-                    "type": "integer"
-                },
-                "room": {
-                    "$ref": "#/definitions/response.RoomResponse"
-                },
-                "room_num": {
-                    "type": "integer"
                 },
                 "total_price": {
                     "type": "integer"
                 }
             }
         },
-        "response.ErrorResponse": {
+        "models.Facility": {
             "type": "object",
             "properties": {
-                "code": {
+                "fac_id": {
                     "type": "integer"
                 },
-                "description": {
+                "name": {
                     "type": "string"
                 },
-                "error": {
-                    "type": "string"
+                "room_facilities": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.RoomFacility"
+                    }
                 }
             }
         },
-        "response.GuestBookingHistoryResponse": {
+        "models.Receipt": {
+            "type": "object",
+            "required": [
+                "amount",
+                "payment_method"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "integer"
+                },
+                "booking_id": {
+                    "type": "integer"
+                },
+                "issue_date": {
+                    "type": "string"
+                },
+                "payment_date": {
+                    "type": "string"
+                },
+                "payment_method": {
+                    "type": "string",
+                    "enum": [
+                        "Credit",
+                        "Debit",
+                        "Bank",
+                        "Transfer"
+                    ]
+                },
+                "receipt_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.Room": {
             "type": "object",
             "properties": {
                 "bookings": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/response.BookingResponse"
+                        "$ref": "#/definitions/models.Booking"
                     }
                 },
-                "guest_id": {
+                "room_num": {
                     "type": "integer"
                 },
-                "last_page": {
-                    "type": "integer"
+                "room_type": {
+                    "$ref": "#/definitions/models.RoomType"
                 },
-                "page": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "response.GuestDetailResponse": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "date_of_birth": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "f_name": {
-                    "type": "string"
-                },
-                "guest_id": {
-                    "type": "integer"
-                },
-                "l_name": {
-                    "type": "string"
-                },
-                "phone": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "response.GuestListResponse": {
-            "type": "object",
-            "properties": {
-                "guests": {
+                "statuses": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/response.GuestResponse"
+                        "$ref": "#/definitions/models.RoomStatus"
                     }
-                },
-                "last_page": {
-                    "type": "integer"
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "response.GuestResponse": {
-            "type": "object",
-            "properties": {
-                "date_of_birth": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "f_name": {
-                    "type": "string"
-                },
-                "guest_id": {
-                    "type": "integer"
-                },
-                "l_name": {
-                    "type": "string"
-                },
-                "phone": {
-                    "type": "string"
-                }
-            }
-        },
-        "response.RoomAvailabilityResponse": {
-            "type": "object",
-            "properties": {
-                "price_per_night": {
-                    "type": "integer"
-                },
-                "room_num": {
-                    "type": "integer"
-                },
-                "room_type": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                }
-            }
-        },
-        "response.RoomDetailResponse": {
-            "type": "object",
-            "properties": {
-                "current_status": {
-                    "$ref": "#/definitions/response.RoomStatusInfo"
-                },
-                "room_num": {
-                    "type": "integer"
-                },
-                "room_type": {
-                    "$ref": "#/definitions/response.RoomTypeResponse"
                 },
                 "type_id": {
                     "type": "integer"
                 }
             }
         },
-        "response.RoomListResponse": {
+        "models.RoomFacility": {
             "type": "object",
             "properties": {
-                "last_page": {
+                "fac_id": {
                     "type": "integer"
                 },
-                "page": {
+                "type_id": {
                     "type": "integer"
+                }
+            }
+        },
+        "models.RoomStatus": {
+            "type": "object",
+            "required": [
+                "status"
+            ],
+            "properties": {
+                "booking": {
+                    "$ref": "#/definitions/models.Booking"
+                },
+                "booking_id": {
+                    "type": "integer"
+                },
+                "calendar": {
+                    "type": "string"
+                },
+                "room_num": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "Available",
+                        "Occupied"
+                    ]
+                }
+            }
+        },
+        "models.RoomType": {
+            "type": "object",
+            "properties": {
+                "area": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "noOfGuest": {
+                    "type": "integer"
+                },
+                "price_per_night": {
+                    "type": "integer"
+                },
+                "room_facilities": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.RoomFacility"
+                    }
                 },
                 "rooms": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/response.RoomResponse"
+                        "$ref": "#/definitions/models.Room"
                     }
                 },
-                "total": {
+                "type_id": {
                     "type": "integer"
                 }
             }
         },
-        "response.RoomResponse": {
+        "services.BookingRequest": {
             "type": "object",
+            "required": [
+                "booking_name",
+                "check_in_date",
+                "check_out_date",
+                "room_num"
+            ],
             "properties": {
+                "booking_name": {
+                    "type": "string"
+                },
+                "check_in_date": {
+                    "type": "string"
+                },
+                "check_out_date": {
+                    "type": "string"
+                },
                 "room_num": {
                     "type": "integer"
-                },
-                "room_type": {
-                    "$ref": "#/definitions/response.RoomTypeResponse"
-                },
-                "type_id": {
-                    "type": "integer"
                 }
             }
         },
-        "response.RoomStatusInfo": {
+        "services.PaymentRequest": {
             "type": "object",
+            "required": [
+                "payment_date",
+                "payment_method"
+            ],
             "properties": {
-                "booking_id": {
-                    "type": "integer"
-                },
-                "check_in": {
+                "payment_date": {
                     "type": "string"
                 },
-                "check_out": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                }
-            }
-        },
-        "response.RoomTypeListResponse": {
-            "type": "object",
-            "properties": {
-                "last_page": {
-                    "type": "integer"
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "room_types": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/response.RoomTypeResponse"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "response.RoomTypeResponse": {
-            "type": "object",
-            "properties": {
-                "area": {
-                    "type": "integer"
-                },
-                "capacity": {
-                    "type": "integer"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "facility": {
-                    "type": "string"
-                },
-                "highlight": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "price_per_night": {
-                    "type": "integer"
-                },
-                "type_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "response.SuccessResponse": {
-            "type": "object",
-            "properties": {
-                "data": {},
-                "message": {
-                    "type": "string"
+                "payment_method": {
+                    "type": "string",
+                    "enum": [
+                        "Credit",
+                        "Debit",
+                        "Bank",
+                        "Transfer"
+                    ]
                 }
             }
         }

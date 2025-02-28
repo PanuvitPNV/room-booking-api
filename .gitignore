@@ -35,3 +35,6 @@ vendor/
 # Air
 tmp/
 *.log
+
+# node
+node_modules/

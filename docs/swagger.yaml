@@ -1,366 +1,209 @@
-basePath: /v1
+basePath: /api
 definitions:
-  request.CheckAvailabilityRequest:
+  handlers.BookingWithPaymentRequest:
     properties:
-      check_in_date:
-        type: string
-      check_out_date:
-        type: string
-      room_num:
-        type: integer
-    required:
-    - check_in_date
-    - check_out_date
-    - room_num
+      booking:
+        $ref: '#/definitions/services.BookingRequest'
+      payment:
+        $ref: '#/definitions/services.PaymentRequest'
     type: object
-  request.CreateBookingRequest:
+  handlers.BookingWithPaymentResponse:
     properties:
-      check_in_date:
-        type: string
-      check_out_date:
-        type: string
-      guest_id:
-        type: integer
-      room_num:
-        type: integer
-    required:
-    - check_in_date
-    - check_out_date
-    - guest_id
-    - room_num
+      booking:
+        $ref: '#/definitions/models.Booking'
+      receipt:
+        $ref: '#/definitions/models.Receipt'
     type: object
-  request.CreateGuestRequest:
+  handlers.DemoResponse:
     properties:
-      date_of_birth:
-        type: string
-      email:
-        type: string
-      f_name:
-        type: string
-      l_name:
-        type: string
-      phone:
-        type: string
-    required:
-    - date_of_birth
-    - email
-    - f_name
-    - l_name
-    - phone
-    type: object
-  request.CreateRoomRequest:
-    properties:
-      room_num:
-        type: integer
-      type_id:
-        type: integer
-    required:
-    - room_num
-    - type_id
-    type: object
-  request.CreateRoomTypeRequest:
-    properties:
-      area:
-        type: integer
-      capacity:
-        type: integer
       description:
         type: string
-      facility:
+      result:
         type: string
-      highlight:
-        type: string
-      name:
-        type: string
-      price_per_night:
-        type: integer
-    required:
-    - area
-    - capacity
-    - name
-    - price_per_night
-    type: object
-  request.GetAvailableRoomsRequest:
-    properties:
-      check_in_date:
-        type: string
-      check_out_date:
-        type: string
-      type_id:
-        type: integer
-    required:
-    - check_in_date
-    - check_out_date
-    type: object
-  request.UpdateGuestRequest:
-    properties:
-      date_of_birth:
-        type: string
-      email:
-        type: string
-      f_name:
-        type: string
-      guest_id:
-        type: integer
-      l_name:
-        type: string
-      phone:
-        type: string
-    required:
-    - guest_id
-    type: object
-  request.UpdateRoomTypeRequest:
-    properties:
-      area:
-        type: integer
-      capacity:
-        type: integer
-      description:
-        type: string
-      facility:
-        type: string
-      highlight:
-        type: string
-      name:
-        type: string
-      price_per_night:
-        type: integer
-      type_id:
-        type: integer
-    required:
-    - type_id
-    type: object
-  response.BookingAvailabilityResponse:
-    properties:
-      price_per_night:
-        type: integer
-      room_num:
-        type: integer
-      room_type:
-        type: string
-      status:
+      title:
         type: string
     type: object
-  response.BookingDetailResponse:
+  handlers.ReceiptRequest:
     properties:
+      amount:
+        minimum: 1
+        type: integer
       booking_id:
         type: integer
+      payment_date:
+        type: string
+      payment_method:
+        enum:
+        - Credit
+        - Debit
+        - Bank
+        - Transfer
+        type: string
+    required:
+    - amount
+    - booking_id
+    - payment_date
+    - payment_method
+    type: object
+  models.Booking:
+    properties:
+      booking_date:
+        type: string
+      booking_id:
+        type: integer
+      booking_name:
+        type: string
       check_in_date:
         type: string
       check_out_date:
         type: string
-      created_at:
-        type: string
-      guest:
-        $ref: '#/definitions/response.GuestResponse'
-      guest_id:
-        type: integer
+      receipt:
+        $ref: '#/definitions/models.Receipt'
       room:
-        $ref: '#/definitions/response.RoomResponse'
+        $ref: '#/definitions/models.Room'
       room_num:
         type: integer
-      status:
-        type: string
+      statuses:
+        items:
+          $ref: '#/definitions/models.RoomStatus'
+        type: array
       total_price:
         type: integer
-      updated_at:
-        type: string
+    required:
+    - booking_name
+    - check_in_date
+    - check_out_date
+    - room_num
     type: object
-  response.BookingListResponse:
+  models.Facility:
+    properties:
+      fac_id:
+        type: integer
+      name:
+        type: string
+      room_facilities:
+        items:
+          $ref: '#/definitions/models.RoomFacility'
+        type: array
+    type: object
+  models.Receipt:
+    properties:
+      amount:
+        type: integer
+      booking_id:
+        type: integer
+      issue_date:
+        type: string
+      payment_date:
+        type: string
+      payment_method:
+        enum:
+        - Credit
+        - Debit
+        - Bank
+        - Transfer
+        type: string
+      receipt_id:
+        type: integer
+    required:
+    - amount
+    - payment_method
+    type: object
+  models.Room:
     properties:
       bookings:
         items:
-          $ref: '#/definitions/response.BookingResponse'
+          $ref: '#/definitions/models.Booking'
         type: array
-      last_page:
-        type: integer
-      page:
-        type: integer
-      total:
-        type: integer
-    type: object
-  response.BookingResponse:
-    properties:
-      booking_id:
-        type: integer
-      check_in_date:
-        type: string
-      check_out_date:
-        type: string
-      guest:
-        $ref: '#/definitions/response.GuestResponse'
-      guest_id:
-        type: integer
-      room:
-        $ref: '#/definitions/response.RoomResponse'
-      room_num:
-        type: integer
-      total_price:
-        type: integer
-    type: object
-  response.ErrorResponse:
-    properties:
-      code:
-        type: integer
-      description:
-        type: string
-      error:
-        type: string
-    type: object
-  response.GuestBookingHistoryResponse:
-    properties:
-      bookings:
-        items:
-          $ref: '#/definitions/response.BookingResponse'
-        type: array
-      guest_id:
-        type: integer
-      last_page:
-        type: integer
-      page:
-        type: integer
-      total:
-        type: integer
-    type: object
-  response.GuestDetailResponse:
-    properties:
-      created_at:
-        type: string
-      date_of_birth:
-        type: string
-      email:
-        type: string
-      f_name:
-        type: string
-      guest_id:
-        type: integer
-      l_name:
-        type: string
-      phone:
-        type: string
-      updated_at:
-        type: string
-    type: object
-  response.GuestListResponse:
-    properties:
-      guests:
-        items:
-          $ref: '#/definitions/response.GuestResponse'
-        type: array
-      last_page:
-        type: integer
-      page:
-        type: integer
-      total:
-        type: integer
-    type: object
-  response.GuestResponse:
-    properties:
-      date_of_birth:
-        type: string
-      email:
-        type: string
-      f_name:
-        type: string
-      guest_id:
-        type: integer
-      l_name:
-        type: string
-      phone:
-        type: string
-    type: object
-  response.RoomAvailabilityResponse:
-    properties:
-      price_per_night:
-        type: integer
       room_num:
         type: integer
       room_type:
-        type: string
-      status:
-        type: string
-    type: object
-  response.RoomDetailResponse:
-    properties:
-      current_status:
-        $ref: '#/definitions/response.RoomStatusInfo'
-      room_num:
-        type: integer
-      room_type:
-        $ref: '#/definitions/response.RoomTypeResponse'
+        $ref: '#/definitions/models.RoomType'
+      statuses:
+        items:
+          $ref: '#/definitions/models.RoomStatus'
+        type: array
       type_id:
         type: integer
     type: object
-  response.RoomListResponse:
+  models.RoomFacility:
     properties:
-      last_page:
+      fac_id:
         type: integer
-      page:
+      type_id:
         type: integer
+    type: object
+  models.RoomStatus:
+    properties:
+      booking:
+        $ref: '#/definitions/models.Booking'
+      booking_id:
+        type: integer
+      calendar:
+        type: string
+      room_num:
+        type: integer
+      status:
+        enum:
+        - Available
+        - Occupied
+        type: string
+    required:
+    - status
+    type: object
+  models.RoomType:
+    properties:
+      area:
+        type: integer
+      description:
+        type: string
+      name:
+        type: string
+      noOfGuest:
+        type: integer
+      price_per_night:
+        type: integer
+      room_facilities:
+        items:
+          $ref: '#/definitions/models.RoomFacility'
+        type: array
       rooms:
         items:
-          $ref: '#/definitions/response.RoomResponse'
+          $ref: '#/definitions/models.Room'
         type: array
-      total:
+      type_id:
         type: integer
     type: object
-  response.RoomResponse:
+  services.BookingRequest:
     properties:
+      booking_name:
+        type: string
+      check_in_date:
+        type: string
+      check_out_date:
+        type: string
       room_num:
         type: integer
-      room_type:
-        $ref: '#/definitions/response.RoomTypeResponse'
-      type_id:
-        type: integer
+    required:
+    - booking_name
+    - check_in_date
+    - check_out_date
+    - room_num
     type: object
-  response.RoomStatusInfo:
+  services.PaymentRequest:
     properties:
-      booking_id:
-        type: integer
-      check_in:
+      payment_date:
         type: string
-      check_out:
+      payment_method:
+        enum:
+        - Credit
+        - Debit
+        - Bank
+        - Transfer
         type: string
-      status:
-        type: string
-    type: object
-  response.RoomTypeListResponse:
-    properties:
-      last_page:
-        type: integer
-      page:
-        type: integer
-      room_types:
-        items:
-          $ref: '#/definitions/response.RoomTypeResponse'
-        type: array
-      total:
-        type: integer
-    type: object
-  response.RoomTypeResponse:
-    properties:
-      area:
-        type: integer
-      capacity:
-        type: integer
-      description:
-        type: string
-      facility:
-        type: string
-      highlight:
-        type: string
-      name:
-        type: string
-      price_per_night:
-        type: integer
-      type_id:
-        type: integer
-    type: object
-  response.SuccessResponse:
-    properties:
-      data: {}
-      message:
-        type: string
+    required:
+    - payment_date
+    - payment_method
     type: object
 host: localhost:8080
 info:
@@ -368,7 +211,8 @@ info:
     email: support@swagger.io
     name: API Support
     url: http://www.swagger.io/support
-  description: This is a hotel room booking server.
+  description: This is a hotel room booking server with transaction management and
+    concurrency control.
   license:
     name: Apache 2.0
     url: http://www.apache.org/licenses/LICENSE-2.0.html
@@ -380,362 +224,24 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get a list of bookings with optional filters
+      description: Find rooms available for booking in a specific date range and guest
+        count
       parameters:
-      - description: Filter by guest ID
+      - description: Check-in date (YYYY-MM-DD)
         in: query
-        name: guest_id
-        type: integer
-      - description: Filter by room number
+        name: checkIn
+        required: true
+        type: string
+      - description: Check-out date (YYYY-MM-DD)
         in: query
-        name: room_num
-        type: integer
-      - description: Page number
+        name: checkOut
+        required: true
+        type: string
+      - description: Number of guests
         in: query
-        name: page
-        type: integer
-      - description: Items per page
-        in: query
-        name: page_size
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.BookingListResponse'
-      summary: List bookings
-      tags:
-      - bookings
-    post:
-      consumes:
-      - application/json
-      description: Create a new room booking with concurrent handling
-      parameters:
-      - description: Booking details
-        in: body
-        name: booking
-        required: true
-        schema:
-          $ref: '#/definitions/request.CreateBookingRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/response.BookingResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "409":
-          description: Conflict
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      summary: Create a new booking
-      tags:
-      - bookings
-  /bookings/{id}:
-    get:
-      consumes:
-      - application/json
-      description: Get details of a specific booking
-      parameters:
-      - description: Booking ID
-        in: path
-        name: id
+        name: guests
         required: true
         type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.BookingDetailResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      summary: Get booking details
-      tags:
-      - bookings
-  /bookings/{id}/cancel:
-    post:
-      consumes:
-      - application/json
-      description: Cancel an existing booking
-      parameters:
-      - description: Booking ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.SuccessResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      summary: Cancel booking
-      tags:
-      - bookings
-  /bookings/check-availability:
-    post:
-      consumes:
-      - application/json
-      description: Check if a room is available for specific dates
-      parameters:
-      - description: Availability check details
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/request.CheckAvailabilityRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.BookingAvailabilityResponse'
-      summary: Check room availability
-      tags:
-      - bookings
-  /guests:
-    get:
-      consumes:
-      - application/json
-      description: Get a paginated list of guests
-      parameters:
-      - description: Page number
-        in: query
-        name: page
-        type: integer
-      - description: Items per page
-        in: query
-        name: page_size
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.GuestListResponse'
-      summary: List guests
-      tags:
-      - guests
-    post:
-      consumes:
-      - application/json
-      description: Register a new guest in the system
-      parameters:
-      - description: Guest details
-        in: body
-        name: guest
-        required: true
-        schema:
-          $ref: '#/definitions/request.CreateGuestRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/response.GuestResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      summary: Create a new guest
-      tags:
-      - guests
-  /guests/{id}:
-    get:
-      consumes:
-      - application/json
-      description: Get details of a specific guest
-      parameters:
-      - description: Guest ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.GuestDetailResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      summary: Get guest details
-      tags:
-      - guests
-    put:
-      consumes:
-      - application/json
-      description: Update an existing guest's information
-      parameters:
-      - description: Guest ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: Guest details
-        in: body
-        name: guest
-        required: true
-        schema:
-          $ref: '#/definitions/request.UpdateGuestRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.GuestResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      summary: Update guest information
-      tags:
-      - guests
-  /guests/{id}/bookings:
-    get:
-      consumes:
-      - application/json
-      description: Get the booking history for a specific guest
-      parameters:
-      - description: Guest ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.GuestBookingHistoryResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      summary: Get guest booking history
-      tags:
-      - guests
-  /rooms:
-    get:
-      consumes:
-      - application/json
-      description: Get a list of rooms with optional type filter
-      parameters:
-      - description: Filter by room type
-        in: query
-        name: type_id
-        type: integer
-      - description: Page number
-        in: query
-        name: page
-        type: integer
-      - description: Items per page
-        in: query
-        name: page_size
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.RoomListResponse'
-      summary: List rooms
-      tags:
-      - rooms
-    post:
-      consumes:
-      - application/json
-      description: Create a new room with specified type
-      parameters:
-      - description: Room details
-        in: body
-        name: room
-        required: true
-        schema:
-          $ref: '#/definitions/request.CreateRoomRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/response.RoomResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      summary: Create a new room
-      tags:
-      - rooms
-  /rooms/{room_num}:
-    get:
-      consumes:
-      - application/json
-      description: Get details of a specific room
-      parameters:
-      - description: Room Number
-        in: path
-        name: room_num
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.RoomDetailResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      summary: Get room details
-      tags:
-      - rooms
-  /rooms/available:
-    post:
-      consumes:
-      - application/json
-      description: Get a list of available rooms for specific dates
-      parameters:
-      - description: Availability request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/request.GetAvailableRoomsRequest'
       produces:
       - application/json
       responses:
@@ -743,24 +249,61 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/response.RoomAvailabilityResponse'
+              $ref: '#/definitions/models.Room'
             type: array
-      summary: List available rooms
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Search for available rooms
       tags:
-      - rooms
-  /rooms/types:
+      - bookings
+  /bookings/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Cancel an existing booking and free up the room
+      parameters:
+      - description: Booking ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success message
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Cancel a booking
+      tags:
+      - bookings
     get:
       consumes:
       - application/json
-      description: Get a paginated list of room types
+      description: Retrieve details of a specific booking by ID
       parameters:
-      - description: Page number
-        in: query
-        name: page
-        type: integer
-      - description: Items per page
-        in: query
-        name: page_size
+      - description: Booking ID
+        in: path
+        name: id
+        required: true
         type: integer
       produces:
       - application/json
@@ -768,92 +311,761 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/response.RoomTypeListResponse'
-      summary: List room types
+            $ref: '#/definitions/models.Booking'
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Booking not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get booking details
       tags:
-      - room-types
+      - bookings
+    put:
+      consumes:
+      - application/json
+      description: Update an existing booking with transaction and concurrency control
+      parameters:
+      - description: Booking ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Updated booking details
+        in: body
+        name: booking
+        required: true
+        schema:
+          $ref: '#/definitions/services.BookingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Booking'
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Update a booking
+      tags:
+      - bookings
+  /bookings/check-availability:
+    get:
+      consumes:
+      - application/json
+      description: Check if a specific room is available for a date range
+      parameters:
+      - description: Room number
+        in: query
+        name: roomNum
+        required: true
+        type: integer
+      - description: Check-in date (YYYY-MM-DD)
+        in: query
+        name: checkIn
+        required: true
+        type: string
+      - description: Check-out date (YYYY-MM-DD)
+        in: query
+        name: checkOut
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Check room availability
+      tags:
+      - bookings
+  /bookings/with-payment:
     post:
       consumes:
       - application/json
-      description: Create a new room type with the provided details
+      description: Create a new booking with payment in a single atomic transaction.
+        First to pay gets the room.
       parameters:
-      - description: Room Type details
+      - description: Booking and payment details
         in: body
-        name: roomType
+        name: request
         required: true
         schema:
-          $ref: '#/definitions/request.CreateRoomTypeRequest'
+          $ref: '#/definitions/handlers.BookingWithPaymentRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/response.RoomTypeResponse'
+            $ref: '#/definitions/handlers.BookingWithPaymentResponse'
         "400":
-          description: Bad Request
+          description: Bad request
           schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      summary: Create a new room type
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create booking with payment
       tags:
-      - room-types
-  /rooms/types/{id}:
+      - bookings
+  /demos/concurrent-bookings:
     get:
       consumes:
       - application/json
-      description: Get details of a specific room type
+      description: Demonstrates how pessimistic locking prevents double booking
       parameters:
-      - description: Room Type ID
-        in: path
-        name: id
+      - description: Room number
+        in: query
+        name: roomNum
         required: true
         type: integer
+      - description: Check-in date (YYYY-MM-DD)
+        in: query
+        name: checkIn
+        required: true
+        type: string
+      - description: Check-out date (YYYY-MM-DD)
+        in: query
+        name: checkOut
+        required: true
+        type: string
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/response.RoomTypeResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      summary: Get room type details
-      tags:
-      - room-types
-    put:
-      consumes:
-      - application/json
-      description: Update an existing room type's details
-      parameters:
-      - description: Room Type ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: Room Type details
-        in: body
-        name: roomType
-        required: true
-        schema:
-          $ref: '#/definitions/request.UpdateRoomTypeRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.RoomTypeResponse'
+            $ref: '#/definitions/handlers.DemoResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/response.ErrorResponse'
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Concurrent Booking Demo
+      tags:
+      - demos
+  /demos/dirty-read/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Demonstrates the dirty read problem in database transactions
+      parameters:
+      - description: Booking ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.DemoResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Dirty Read Demo
+      tags:
+      - demos
+  /demos/lost-update-with-locking/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Demonstrates how pessimistic locking prevents lost updates
+      parameters:
+      - description: Booking ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.DemoResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Lost Update Prevention Demo
+      tags:
+      - demos
+  /demos/lost-update/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Demonstrates the lost update problem in concurrent transactions
+      parameters:
+      - description: Booking ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.DemoResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Lost Update Demo
+      tags:
+      - demos
+  /demos/phantom-read:
+    get:
+      consumes:
+      - application/json
+      description: Demonstrates the phantom read problem in database transactions
+      parameters:
+      - description: Check-in date (YYYY-MM-DD)
+        in: query
+        name: checkIn
+        required: true
+        type: string
+      - description: Check-out date (YYYY-MM-DD)
+        in: query
+        name: checkOut
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.DemoResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Phantom Read Demo
+      tags:
+      - demos
+  /demos/serialization-anomaly:
+    get:
+      consumes:
+      - application/json
+      description: Demonstrates serialization anomaly in database transactions
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.DemoResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Serialization Anomaly Demo
+      tags:
+      - demos
+  /facilities:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve all room facilities
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Facility'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get all facilities
+      tags:
+      - facilities
+  /facilities/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a specific facility
+      parameters:
+      - description: Facility ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Facility'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      summary: Update room type
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get a facility by ID
+      tags:
+      - facilities
+  /receipts:
+    post:
+      consumes:
+      - application/json
+      description: Create a payment receipt for a booking with transaction control
+      parameters:
+      - description: Receipt details
+        in: body
+        name: receipt
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ReceiptRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Receipt'
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create a new receipt
+      tags:
+      - receipts
+  /receipts/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete an existing receipt with transaction control
+      parameters:
+      - description: Receipt ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success message
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Delete a receipt
+      tags:
+      - receipts
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a receipt by its ID
+      parameters:
+      - description: Receipt ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Receipt'
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Receipt not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get receipt by ID
+      tags:
+      - receipts
+    put:
+      consumes:
+      - application/json
+      description: Update an existing receipt with transaction control
+      parameters:
+      - description: Receipt ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Updated receipt details
+        in: body
+        name: receipt
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ReceiptRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Receipt'
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Receipt not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Update a receipt
+      tags:
+      - receipts
+  /receipts/booking/{bookingId}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a receipt associated with a specific booking
+      parameters:
+      - description: Booking ID
+        in: path
+        name: bookingId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Receipt'
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Receipt not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get receipt by booking ID
+      tags:
+      - receipts
+  /room-types:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve all room types with their facilities
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.RoomType'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get all room types
       tags:
       - room-types
+  /room-types/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a specific room type with its facilities
+      parameters:
+      - description: Room Type ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.RoomType'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get a room type by ID
+      tags:
+      - room-types
+  /rooms:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve all hotel rooms with their types
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Room'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get all rooms
+      tags:
+      - rooms
+  /rooms/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a specific room by its room number
+      parameters:
+      - description: Room Number
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Room'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get a room by ID
+      tags:
+      - rooms
+  /rooms/{id}/calendar:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve the availability calendar for a specific room
+      parameters:
+      - description: Room Number
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Start Date (YYYY-MM-DD)
+        in: query
+        name: startDate
+        required: true
+        type: string
+      - description: End Date (YYYY-MM-DD)
+        in: query
+        name: endDate
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.RoomStatus'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get room calendar
+      tags:
+      - rooms
+  /rooms/{id}/facilities:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a specific room with all its facilities
+      parameters:
+      - description: Room Number
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Room'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get a room with its facilities
+      tags:
+      - rooms
+  /rooms/type/{typeId}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve all rooms of a specific room type
+      parameters:
+      - description: Room Type ID
+        in: path
+        name: typeId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Room'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get rooms by type
+      tags:
+      - rooms
 swagger: "2.0"
