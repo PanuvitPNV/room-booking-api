@@ -81,25 +81,21 @@ func (s *EchoServer) Start() {
 	bookingRepo := repositories.NewBookingRepository(s.db)
 	receiptRepo := repositories.NewReceiptRepository(s.db)
 	roomRepo := repositories.NewRoomRepository(s.db)
-	concurrentScenarios := repositories.NewConcurrentScenarios(s.db)
 
 	// Initialize services
 	bookingService := services.NewBookingService(s.db, bookingRepo)
 	receiptService := services.NewReceiptService(s.db, receiptRepo)
 	roomService := services.NewRoomService(s.db, roomRepo)
-	concurrentService := services.NewConcurrentService(s.db, concurrentScenarios)
 
 	// Initialize handlers
 	bookingHandler := handlers.NewBookingHandler(bookingService)
 	receiptHandler := handlers.NewReceiptHandler(receiptService)
 	roomHandler := handlers.NewRoomHandler(roomService)
-	concurrentHandler := handlers.NewConcurrentHandler(concurrentService)
 
 	// Register routes
 	bookingHandler.RegisterRoutes(s.echo)
 	receiptHandler.RegisterRoutes(s.echo)
 	roomHandler.RegisterRoutes(s.echo)
-	concurrentHandler.RegisterRoutes(s.echo)
 
 	// Add health check endpoint
 	s.echo.GET("/health", func(c echo.Context) error {

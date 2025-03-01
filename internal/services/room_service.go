@@ -23,24 +23,24 @@ func NewRoomService(db *gorm.DB, roomRepo *repositories.RoomRepository) *RoomSer
 	}
 }
 
-// GetAllRooms retrieves all rooms
-func (s *RoomService) GetAllRooms(tx *gorm.DB) ([]models.Room, error) {
-	return s.roomRepo.GetAllRooms(tx)
+// GetAllRoomsWithDetails retrieves all rooms with their types and facilities
+func (s *RoomService) GetAllRoomsWithDetails(tx *gorm.DB) ([]models.Room, error) {
+	return s.roomRepo.GetAllRoomsWithDetails(tx)
 }
 
-// GetRoomByID retrieves a room by ID
-func (s *RoomService) GetRoomByID(tx *gorm.DB, roomNum int) (*models.Room, error) {
-	return s.roomRepo.GetRoomByID(tx, roomNum)
+// GetRoomWithDetails retrieves a room by ID with its type and facilities
+func (s *RoomService) GetRoomWithDetails(tx *gorm.DB, roomNum int) (*models.Room, error) {
+	return s.roomRepo.GetRoomWithDetails(tx, roomNum)
 }
 
-// GetRoomWithFacilities retrieves a room with all its facilities
-func (s *RoomService) GetRoomWithFacilities(tx *gorm.DB, roomNum int) (*models.Room, error) {
-	return s.roomRepo.GetRoomWithFacilities(tx, roomNum)
+// GetRoomsByTypeWithDetails retrieves all rooms of a specific type with facilities
+func (s *RoomService) GetRoomsByTypeWithDetails(tx *gorm.DB, typeID int) ([]models.Room, error) {
+	return s.roomRepo.GetRoomsByTypeWithDetails(tx, typeID)
 }
 
-// GetRoomsByType retrieves all rooms of a specific type
-func (s *RoomService) GetRoomsByType(tx *gorm.DB, typeID int) ([]models.Room, error) {
-	return s.roomRepo.GetRoomsByType(tx, typeID)
+// GetAllRoomTypes retrieves all room types with their facilities
+func (s *RoomService) GetAllRoomTypes(tx *gorm.DB) ([]models.RoomType, error) {
+	return s.roomRepo.GetAllRoomTypes(tx)
 }
 
 // GetRoomCalendar retrieves the availability calendar for a room
@@ -57,24 +57,4 @@ func (s *RoomService) GetRoomCalendar(tx *gorm.DB, roomNum int, startDate, endDa
 	}
 
 	return s.roomRepo.GetRoomCalendar(tx, roomNum, startDate, endDate)
-}
-
-// GetAllRoomTypes retrieves all room types
-func (s *RoomService) GetAllRoomTypes(tx *gorm.DB) ([]models.RoomType, error) {
-	return s.roomRepo.GetAllRoomTypes(tx)
-}
-
-// GetRoomTypeByID retrieves a room type by ID
-func (s *RoomService) GetRoomTypeByID(tx *gorm.DB, typeID int) (*models.RoomType, error) {
-	return s.roomRepo.GetRoomTypeByID(tx, typeID)
-}
-
-// GetAllFacilities retrieves all facilities
-func (s *RoomService) GetAllFacilities(tx *gorm.DB) ([]models.Facility, error) {
-	return s.roomRepo.GetAllFacilities(tx)
-}
-
-// GetFacilityByID retrieves a facility by ID
-func (s *RoomService) GetFacilityByID(tx *gorm.DB, facilityID int) (*models.Facility, error) {
-	return s.roomRepo.GetFacilityByID(tx, facilityID)
 }

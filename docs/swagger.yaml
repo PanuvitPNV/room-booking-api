@@ -14,15 +14,6 @@ definitions:
       receipt:
         $ref: '#/definitions/models.Receipt'
     type: object
-  handlers.DemoResponse:
-    properties:
-      description:
-        type: string
-      result:
-        type: string
-      title:
-        type: string
-    type: object
   handlers.ReceiptRequest:
     properties:
       amount:
@@ -75,16 +66,12 @@ definitions:
     - check_out_date
     - room_num
     type: object
-  models.Facility:
+  models.FacilityResponse:
     properties:
       fac_id:
         type: integer
       name:
         type: string
-      room_facilities:
-        items:
-          $ref: '#/definitions/models.RoomFacility'
-        type: array
     type: object
   models.Receipt:
     properties:
@@ -133,6 +120,24 @@ definitions:
       type_id:
         type: integer
     type: object
+  models.RoomFacilityResponse:
+    properties:
+      fac_id:
+        type: integer
+      facility:
+        $ref: '#/definitions/models.FacilityResponse'
+      type_id:
+        type: integer
+    type: object
+  models.RoomResponse:
+    properties:
+      room_num:
+        type: integer
+      room_type:
+        $ref: '#/definitions/models.RoomTypeResponse'
+      type_id:
+        type: integer
+    type: object
   models.RoomStatus:
     properties:
       booking:
@@ -171,6 +176,25 @@ definitions:
         items:
           $ref: '#/definitions/models.Room'
         type: array
+      type_id:
+        type: integer
+    type: object
+  models.RoomTypeResponse:
+    properties:
+      area:
+        type: integer
+      description:
+        type: string
+      facilities:
+        items:
+          $ref: '#/definitions/models.RoomFacilityResponse'
+        type: array
+      name:
+        type: string
+      noOfGuest:
+        type: integer
+      price_per_night:
+        type: integer
       type_id:
         type: integer
     type: object
@@ -432,263 +456,6 @@ paths:
       summary: Create booking with payment
       tags:
       - bookings
-  /demos/concurrent-bookings:
-    get:
-      consumes:
-      - application/json
-      description: Demonstrates how pessimistic locking prevents double booking
-      parameters:
-      - description: Room number
-        in: query
-        name: roomNum
-        required: true
-        type: integer
-      - description: Check-in date (YYYY-MM-DD)
-        in: query
-        name: checkIn
-        required: true
-        type: string
-      - description: Check-out date (YYYY-MM-DD)
-        in: query
-        name: checkOut
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.DemoResponse'
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Concurrent Booking Demo
-      tags:
-      - demos
-  /demos/dirty-read/{id}:
-    get:
-      consumes:
-      - application/json
-      description: Demonstrates the dirty read problem in database transactions
-      parameters:
-      - description: Booking ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.DemoResponse'
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Dirty Read Demo
-      tags:
-      - demos
-  /demos/lost-update-with-locking/{id}:
-    get:
-      consumes:
-      - application/json
-      description: Demonstrates how pessimistic locking prevents lost updates
-      parameters:
-      - description: Booking ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.DemoResponse'
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Lost Update Prevention Demo
-      tags:
-      - demos
-  /demos/lost-update/{id}:
-    get:
-      consumes:
-      - application/json
-      description: Demonstrates the lost update problem in concurrent transactions
-      parameters:
-      - description: Booking ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.DemoResponse'
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Lost Update Demo
-      tags:
-      - demos
-  /demos/phantom-read:
-    get:
-      consumes:
-      - application/json
-      description: Demonstrates the phantom read problem in database transactions
-      parameters:
-      - description: Check-in date (YYYY-MM-DD)
-        in: query
-        name: checkIn
-        required: true
-        type: string
-      - description: Check-out date (YYYY-MM-DD)
-        in: query
-        name: checkOut
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.DemoResponse'
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Phantom Read Demo
-      tags:
-      - demos
-  /demos/serialization-anomaly:
-    get:
-      consumes:
-      - application/json
-      description: Demonstrates serialization anomaly in database transactions
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.DemoResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Serialization Anomaly Demo
-      tags:
-      - demos
-  /facilities:
-    get:
-      consumes:
-      - application/json
-      description: Retrieve all room facilities
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/models.Facility'
-            type: array
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Get all facilities
-      tags:
-      - facilities
-  /facilities/{id}:
-    get:
-      consumes:
-      - application/json
-      description: Retrieve a specific facility
-      parameters:
-      - description: Facility ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.Facility'
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Get a facility by ID
-      tags:
-      - facilities
   /receipts:
     post:
       consumes:
@@ -861,7 +628,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/models.RoomType'
+              $ref: '#/definitions/models.RoomTypeResponse'
             type: array
         "500":
           description: Internal Server Error
@@ -872,44 +639,11 @@ paths:
       summary: Get all room types
       tags:
       - room-types
-  /room-types/{id}:
-    get:
-      consumes:
-      - application/json
-      description: Retrieve a specific room type with its facilities
-      parameters:
-      - description: Room Type ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.RoomType'
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Get a room type by ID
-      tags:
-      - room-types
   /rooms:
     get:
       consumes:
       - application/json
-      description: Retrieve all hotel rooms with their types
+      description: Retrieve all hotel rooms with their types and facilities
       produces:
       - application/json
       responses:
@@ -917,7 +651,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/models.Room'
+              $ref: '#/definitions/models.RoomResponse'
             type: array
         "500":
           description: Internal Server Error
@@ -925,14 +659,14 @@ paths:
             additionalProperties:
               type: string
             type: object
-      summary: Get all rooms
+      summary: Get all rooms with details
       tags:
       - rooms
   /rooms/{id}:
     get:
       consumes:
       - application/json
-      description: Retrieve a specific room by its room number
+      description: Retrieve a specific room with its type and facilities
       parameters:
       - description: Room Number
         in: path
@@ -945,7 +679,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.Room'
+            $ref: '#/definitions/models.RoomResponse'
         "404":
           description: Not Found
           schema:
@@ -958,7 +692,7 @@ paths:
             additionalProperties:
               type: string
             type: object
-      summary: Get a room by ID
+      summary: Get a room with details
       tags:
       - rooms
   /rooms/{id}/calendar:
@@ -1006,44 +740,11 @@ paths:
       summary: Get room calendar
       tags:
       - rooms
-  /rooms/{id}/facilities:
-    get:
-      consumes:
-      - application/json
-      description: Retrieve a specific room with all its facilities
-      parameters:
-      - description: Room Number
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.Room'
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Get a room with its facilities
-      tags:
-      - rooms
   /rooms/type/{typeId}:
     get:
       consumes:
       - application/json
-      description: Retrieve all rooms of a specific room type
+      description: Retrieve all rooms of a specific room type with facilities
       parameters:
       - description: Room Type ID
         in: path
@@ -1057,7 +758,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/models.Room'
+              $ref: '#/definitions/models.RoomResponse'
             type: array
         "500":
           description: Internal Server Error
@@ -1065,7 +766,7 @@ paths:
             additionalProperties:
               type: string
             type: object
-      summary: Get rooms by type
+      summary: Get rooms by type with details
       tags:
       - rooms
 swagger: "2.0"

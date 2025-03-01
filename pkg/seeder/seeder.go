@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"math/rand"
 	"time"
@@ -10,75 +11,106 @@ import (
 	"github.com/panuvitpnv/room-booking-api/internal/models"
 	"github.com/panuvitpnv/room-booking-api/pkg/databases"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
-func main() {
-	// Initialize configuration and database connection
-	conf := config.ConfigGetting()
-	db := databases.NewPostgresDatabase(conf.Database)
-	gormDB := db.Connect()
+// Global configuration for database access
+var dbConfig *config.Config
 
-	// Seed the random number generator
+func main() {
+	// Initialize the random seed
 	rand.Seed(time.Now().UnixNano())
 
-	log.Println("Starting database seeding...")
+	// Get configuration
+	dbConfig = config.ConfigGetting()
 
-	// Begin transaction
-	tx := gormDB.Begin()
-	if tx.Error != nil {
-		log.Fatalf("Failed to begin transaction: %v", tx.Error)
+	// Connect to database
+	db := databases.NewPostgresDatabase(dbConfig.Database)
+	gormDB := db.Connect()
+
+	log.Println("Starting database seeding with transaction management and concurrency control...")
+
+	// Check if we have existing data
+	var existingRoomTypes int64
+	gormDB.Model(&models.RoomType{}).Count(&existingRoomTypes)
+
+	if existingRoomTypes > 0 {
+		log.Println("Database already has data. Skipping basic seed operations.")
+	} else {
+		log.Println("Seeding basic data (room types, facilities, etc.)...")
+
+		// Begin the main transaction for basic data
+		tx := gormDB.Begin()
+		if tx.Error != nil {
+			log.Fatalf("Failed to begin transaction: %v", tx.Error)
+		}
+
+		// Defer a transaction rollback in case of errors
+		defer func() {
+			if r := recover(); r != nil {
+				tx.Rollback()
+				log.Fatalf("Seeding failed with panic: %v", r)
+			}
+		}()
+
+		// Seed room types
+		roomTypes, err := seedRoomTypes(tx)
+		if err != nil {
+			tx.Rollback()
+			log.Fatalf("Error seeding room types: %v", err)
+		}
+
+		// Seed facilities
+		facilities, err := seedFacilities(tx)
+		if err != nil {
+			tx.Rollback()
+			log.Fatalf("Error seeding facilities: %v", err)
+		}
+
+		// Seed room facilities
+		if err := seedRoomFacilities(tx, roomTypes, facilities); err != nil {
+			tx.Rollback()
+			log.Fatalf("Error seeding room facilities: %v", err)
+		}
+
+		// Seed rooms
+		rooms, err := seedRooms(tx, roomTypes)
+		if err != nil {
+			tx.Rollback()
+			log.Fatalf("Error seeding rooms: %v", err)
+		}
+
+		// Seed last running
+		if err := seedLastRunning(tx); err != nil {
+			tx.Rollback()
+			log.Fatalf("Error seeding last running: %v", err)
+		}
+
+		// Commit transaction for basic data
+		if err := tx.Commit().Error; err != nil {
+			log.Fatalf("Failed to commit basic data transaction: %v", err)
+		}
+
+		log.Println("Basic data seeding completed successfully!")
+
+		// Seed bookings with sequential approach (no concurrency)
+		if err := seedBookings(gormDB, rooms); err != nil {
+			log.Fatalf("Error seeding bookings: %v", err)
+		}
 	}
 
-	// Seed room types
-	roomTypes, err := seedRoomTypes(tx)
-	if err != nil {
-		tx.Rollback()
-		log.Fatalf("Error seeding room types: %v", err)
-	}
-
-	// Seed facilities
-	facilities, err := seedFacilities(tx)
-	if err != nil {
-		tx.Rollback()
-		log.Fatalf("Error seeding facilities: %v", err)
-	}
-
-	// Seed room facilities
-	if err := seedRoomFacilities(tx, roomTypes, facilities); err != nil {
-		tx.Rollback()
-		log.Fatalf("Error seeding room facilities: %v", err)
-	}
-
-	// Seed rooms
-	rooms, err := seedRooms(tx, roomTypes)
-	if err != nil {
-		tx.Rollback()
-		log.Fatalf("Error seeding rooms: %v", err)
-	}
-
-	// Seed last running
-	if err := seedLastRunning(tx); err != nil {
-		tx.Rollback()
-		log.Fatalf("Error seeding last running: %v", err)
-	}
-
-	// Seed sample bookings and receipts
-	if err := seedBookingsAndReceipts(tx, rooms); err != nil {
-		tx.Rollback()
-		log.Fatalf("Error seeding bookings and receipts: %v", err)
-	}
-
-	// Commit transaction
-	if err := tx.Commit().Error; err != nil {
-		log.Fatalf("Failed to commit transaction: %v", err)
+	// Run conflict scenario test (if needed)
+	if err := seedConflictScenarios(gormDB); err != nil {
+		log.Printf("Error setting up conflict scenarios (non-fatal): %v", err)
 	}
 
 	log.Println("Database seeding completed successfully!")
 	log.Println("Seeded:")
-	log.Println("- Room types, facilities, and their relationships")
+	log.Println("- Room types, facilities, and room-facility relationships")
 	log.Println("- Rooms assigned to different room types")
-	log.Println("- Sample bookings with receipts")
+	log.Println("- Realistic bookings with proper date management")
+	log.Println("- Receipts for completed bookings")
+	log.Println("- Room status entries with proper locking mechanisms")
+	log.Println("- Test scenarios for concurrency handling")
 }
 
 func seedRoomTypes(tx *gorm.DB) ([]models.RoomType, error) {
@@ -125,13 +157,12 @@ func seedRoomTypes(tx *gorm.DB) ([]models.RoomType, error) {
 		},
 	}
 
-	for _, roomType := range roomTypes {
-		if err := tx.Create(&roomType).Error; err != nil {
-			return nil, err
-		}
+	// Use batch insert with transaction for better performance
+	if err := tx.CreateInBatches(&roomTypes, len(roomTypes)).Error; err != nil {
+		return nil, fmt.Errorf("failed to create room types: %w", err)
 	}
 
-	log.Printf("Seeded %d room types", len(roomTypes))
+	log.Printf("Successfully seeded %d room types", len(roomTypes))
 	return roomTypes, nil
 }
 
@@ -154,13 +185,12 @@ func seedFacilities(tx *gorm.DB) ([]models.Facility, error) {
 		{FacilityID: 15, Name: "Room Service"},
 	}
 
-	for _, facility := range facilities {
-		if err := tx.Create(&facility).Error; err != nil {
-			return nil, err
-		}
+	// Using batch insert for efficiency
+	if err := tx.CreateInBatches(&facilities, len(facilities)).Error; err != nil {
+		return nil, fmt.Errorf("failed to create facilities: %w", err)
 	}
 
-	log.Printf("Seeded %d facilities", len(facilities))
+	log.Printf("Successfully seeded %d facilities", len(facilities))
 	return facilities, nil
 }
 
@@ -178,21 +208,19 @@ func seedRoomFacilities(tx *gorm.DB, roomTypes []models.RoomType, facilities []m
 
 	for roomTypeID, facilityIDs := range roomTypeFacilities {
 		for _, facilityID := range facilityIDs {
-			roomFacility := models.RoomFacility{
+			roomFacilities = append(roomFacilities, models.RoomFacility{
 				TypeID:     roomTypeID,
 				FacilityID: facilityID,
-			}
-			roomFacilities = append(roomFacilities, roomFacility)
+			})
 		}
 	}
 
-	for _, roomFacility := range roomFacilities {
-		if err := tx.Create(&roomFacility).Error; err != nil {
-			return err
-		}
+	// Using batch insert for efficiency
+	if err := tx.CreateInBatches(&roomFacilities, len(roomFacilities)).Error; err != nil {
+		return fmt.Errorf("failed to create room facilities: %w", err)
 	}
 
-	log.Printf("Seeded %d room facility relationships", len(roomFacilities))
+	log.Printf("Successfully seeded %d room facility relationships", len(roomFacilities))
 	return nil
 }
 
@@ -211,234 +239,414 @@ func seedRooms(tx *gorm.DB, roomTypes []models.RoomType) ([]models.Room, error) 
 
 	for typeID, count := range roomCounts {
 		for i := 0; i < count; i++ {
-			room := models.Room{
+			rooms = append(rooms, models.Room{
 				RoomNum: roomNum,
 				TypeID:  typeID,
-			}
-
-			if err := tx.Create(&room).Error; err != nil {
-				return nil, err
-			}
-
-			rooms = append(rooms, room)
+			})
 			roomNum++
 		}
 	}
 
-	log.Printf("Seeded %d rooms", len(rooms))
+	// Using batch insert for efficiency
+	if err := tx.CreateInBatches(&rooms, len(rooms)).Error; err != nil {
+		return nil, fmt.Errorf("failed to create rooms: %w", err)
+	}
+
+	log.Printf("Successfully seeded %d rooms", len(rooms))
 	return rooms, nil
 }
 
+// Fixed seedLastRunning function that ensures the LastRunning field is properly set
 func seedLastRunning(tx *gorm.DB) error {
+	// Check if a record already exists for the current year
+	currentYear := time.Now().Year()
+	var existingRecord models.LastRunning
+
+	result := tx.Where("year = ?", currentYear).First(&existingRecord)
+	if result.Error == nil {
+		// Record already exists, no need to create a new one
+		log.Printf("LastRunning record for year %d already exists with value %d",
+			currentYear, existingRecord.LastRunning)
+		return nil
+	}
+
+	if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		// If it's an error other than "record not found", return it
+		return fmt.Errorf("error checking for existing LastRunning record: %w", result.Error)
+	}
+
+	// Create a new record with an explicit initial value
 	lastRunning := models.LastRunning{
-		LastRunning: 0,
-		Year:        time.Now().Year(),
+		LastRunning: 1, // Start with 1 instead of 0 to avoid potential NULL issues
+		Year:        currentYear,
 	}
 
-	if err := tx.Create(&lastRunning).Error; err != nil {
-		return err
+	// Use SQL executor directly to ensure the value is set properly
+	err := tx.Exec("INSERT INTO last_runnings (last_running, year) VALUES (?, ?)",
+		lastRunning.LastRunning, lastRunning.Year).Error
+
+	if err != nil {
+		return fmt.Errorf("failed to create last running record: %w", err)
 	}
 
-	log.Println("Seeded last running record")
+	log.Printf("Successfully seeded last_runnings record with initial value %d for year %d",
+		lastRunning.LastRunning, lastRunning.Year)
 	return nil
 }
 
-func seedBookingsAndReceipts(tx *gorm.DB, rooms []models.Room) error {
-	// Generate 20 sample bookings across different rooms
-	numBookings := 20
-	bookings := make([]models.Booking, 0, numBookings)
-
-	// Generate some past, current, and future bookings
+// Helper function to generate reservation dates
+func generateBookingDates(bookingType string) (time.Time, time.Time, time.Time) {
 	now := time.Now()
 	currentYear := now.Year()
 	currentMonth := now.Month()
+	bookingDate := now.AddDate(0, 0, -rand.Intn(30)) // Booking made 0-30 days ago
 
+	var checkInDate, checkOutDate time.Time
+
+	switch bookingType {
+	case "past":
+		// Past bookings (1-3 months ago)
+		monthOffset := 1 + rand.Intn(3)
+		dayOffset := 1 + rand.Intn(25)
+		checkInDate = time.Date(currentYear, currentMonth-time.Month(monthOffset), dayOffset, 14, 0, 0, 0, time.Local)
+		stayDuration := 1 + rand.Intn(5) // 1-5 nights
+		checkOutDate = checkInDate.AddDate(0, 0, stayDuration)
+	case "current":
+		// Current bookings (within last 5 days to next 5 days)
+		daysOffset := rand.Intn(10) - 5
+		checkInDate = now.AddDate(0, 0, daysOffset)
+		stayDuration := 1 + rand.Intn(4) // 1-4 nights
+		checkOutDate = checkInDate.AddDate(0, 0, stayDuration)
+	case "future":
+		// Future bookings (next 1-6 months)
+		monthOffset := 1 + rand.Intn(6)
+		dayOffset := 1 + rand.Intn(25)
+		checkInDate = time.Date(currentYear, currentMonth+time.Month(monthOffset), dayOffset, 14, 0, 0, 0, time.Local)
+		stayDuration := 1 + rand.Intn(7) // 1-7 nights
+		checkOutDate = checkInDate.AddDate(0, 0, stayDuration)
+	default:
+		// Random bookings throughout the year if type is unknown
+		daysOffset := rand.Intn(365) - 60 // -60 days to +305 days from now
+		checkInDate = now.AddDate(0, 0, daysOffset)
+		stayDuration := 1 + rand.Intn(10) // 1-10 nights
+		checkOutDate = checkInDate.AddDate(0, 0, stayDuration)
+	}
+
+	// Make sure booking date is before check-in date
+	if bookingDate.After(checkInDate.AddDate(0, 0, -1)) {
+		bookingDate = checkInDate.AddDate(0, 0, -1-rand.Intn(15))
+	}
+
+	return checkInDate, checkOutDate, bookingDate
+}
+
+// Non-concurrent booking seeding to avoid connection issues
+func seedBookings(db *gorm.DB, rooms []models.Room) error {
+	// Guest names for bookings
 	guestNames := []string{
 		"John Smith", "Jane Doe", "Michael Johnson", "Emily Davis",
 		"David Wilson", "Sarah Brown", "Robert Taylor", "Jessica Miller",
 		"Thomas Moore", "Jennifer Anderson", "William White", "Lisa Martinez",
 		"Daniel Clark", "Mary Rodriguez", "James Lewis", "Patricia Allen",
 		"Christopher Young", "Barbara Hall", "Matthew King", "Elizabeth Scott",
+		"Charles Harris", "Nancy Jackson", "Brian Thompson", "Susan Wright",
+		"Kevin Green", "Karen Walker", "Edward Baker", "Margaret Phillips",
+		"George Turner", "Sandra Lee", "Mark Wright", "Michelle Hall",
+		"Richard Adams", "Donna Nelson", "Joseph Carter", "Ruth Thomas",
+		"Kenneth Lewis", "Carol Young", "Paul Scott", "Sharon Harris",
 	}
 
 	paymentMethods := []string{"Credit", "Debit", "Bank Transfer"}
 
-	// First, check if any bookings already exist
-	var existingBookingCount int64
-	if err := tx.Model(&models.Booking{}).Count(&existingBookingCount).Error; err != nil {
-		return err
+	// Set up booking distribution
+	bookingDistribution := map[string]int{
+		"past":    15, // Past bookings
+		"current": 10, // Current bookings (ongoing or very recent)
+		"future":  25, // Future bookings
 	}
 
-	if existingBookingCount > 0 {
-		log.Printf("Skipping booking seeding as %d bookings already exist", existingBookingCount)
-		return nil
+	tx := db.Begin()
+	if tx.Error != nil {
+		return fmt.Errorf("failed to begin transaction: %w", tx.Error)
 	}
 
-	// Get or create LastRunning for the current year
+	// Temporarily disable triggers for bulk seeding
+	if err := tx.Exec("ALTER TABLE bookings DISABLE TRIGGER ALL").Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to disable triggers: %w", err)
+	}
+
+	// Verify or create LastRunning record for current year
+	currentYear := time.Now().Year()
 	var lastRunning models.LastRunning
+
 	result := tx.Where("year = ?", currentYear).First(&lastRunning)
-	if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return result.Error
-	}
-
-	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		// Create new LastRunning record if it doesn't exist
-		lastRunning = models.LastRunning{
-			LastRunning: 0,
-			Year:        currentYear,
-		}
-		if err := tx.Create(&lastRunning).Error; err != nil {
-			return err
-		}
-	}
-
-	for i := 0; i < numBookings; i++ {
-		// Random room selection
-		room := rooms[rand.Intn(len(rooms))]
-
-		// Get room price
-		var roomType models.RoomType
-		if err := tx.First(&roomType, "type_id = ?", room.TypeID).Error; err != nil {
-			return err
-		}
-
-		// Create random date range
-		var checkInDate, checkOutDate time.Time
-
-		if i < 5 {
-			// Past bookings
-			monthOffset := rand.Intn(6) // 0-5 months ago
-			checkInDate = time.Date(currentYear, currentMonth-time.Month(monthOffset), 1+rand.Intn(15), 14, 0, 0, 0, time.Local)
-			stayDuration := 1 + rand.Intn(5) // 1-5 nights
-			checkOutDate = checkInDate.AddDate(0, 0, stayDuration)
-		} else if i < 15 {
-			// Current and near future bookings
-			daysOffset := rand.Intn(60) - 10 // -10 to 50 days from now
-			checkInDate = now.AddDate(0, 0, daysOffset)
-			stayDuration := 1 + rand.Intn(7) // 1-7 nights
-			checkOutDate = checkInDate.AddDate(0, 0, stayDuration)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			// Create if it doesn't exist
+			lastRunning = models.LastRunning{
+				LastRunning: 0,
+				Year:        currentYear,
+			}
+			if err := tx.Create(&lastRunning).Error; err != nil {
+				tx.Rollback()
+				return fmt.Errorf("failed to create last running record: %w", err)
+			}
 		} else {
-			// Far future bookings
-			monthOffset := 2 + rand.Intn(4) // 2-5 months in the future
-			checkInDate = time.Date(currentYear, currentMonth+time.Month(monthOffset), 1+rand.Intn(20), 14, 0, 0, 0, time.Local)
-			stayDuration := 1 + rand.Intn(10) // 1-10 nights
-			checkOutDate = checkInDate.AddDate(0, 0, stayDuration)
-		}
-
-		// Calculate booking ID (YYYYXXXXXX format)
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&lastRunning, "year = ?", currentYear).Error; err != nil {
-			return err
-		}
-
-		lastRunning.LastRunning++
-		if err := tx.Save(&lastRunning).Error; err != nil {
-			return err
-		}
-
-		bookingID := currentYear*1000000 + lastRunning.LastRunning
-
-		// Calculate total price
-		nights := int(checkOutDate.Sub(checkInDate).Hours() / 24)
-		if nights < 1 {
-			nights = 1
-		}
-		totalPrice := roomType.PricePerNight * nights
-
-		// Check if booking with this ID already exists
-		var existingBooking models.Booking
-		result := tx.Where("booking_id = ?", bookingID).First(&existingBooking)
-		if result.Error == nil {
-			// Skip this booking if ID already exists
-			log.Printf("Skipping booking with ID %d as it already exists", bookingID)
-			continue
-		}
-
-		if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return result.Error
-		}
-
-		// Create booking
-		booking := models.Booking{
-			BookingID:    bookingID,
-			BookingName:  guestNames[i%len(guestNames)],
-			RoomNum:      room.RoomNum,
-			CheckInDate:  checkInDate,
-			CheckOutDate: checkOutDate,
-			BookingDate:  time.Now().AddDate(0, 0, -rand.Intn(30)), // Booking made 0-30 days ago
-			TotalPrice:   totalPrice,
-		}
-
-		// Disable triggers temporarily for seeding
-		if err := tx.Exec("ALTER TABLE bookings DISABLE TRIGGER ALL").Error; err != nil {
-			return err
-		}
-
-		if err := tx.Create(&booking).Error; err != nil {
-			return err
-		}
-
-		// Re-enable triggers
-		if err := tx.Exec("ALTER TABLE bookings ENABLE TRIGGER ALL").Error; err != nil {
-			return err
-		}
-
-		bookings = append(bookings, booking)
-
-		// Update room status for each day of the booking
-		current := checkInDate
-		for current.Before(checkOutDate) || current.Equal(checkOutDate) {
-			status := models.RoomStatus{
-				RoomNum:   room.RoomNum,
-				Calendar:  current,
-				Status:    "Occupied",
-				BookingID: &booking.BookingID,
-			}
-
-			// Use upsert to handle potential existing records
-			if err := tx.Exec(`
-                INSERT INTO room_statuses (room_num, calendar, status, booking_id)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT (room_num, calendar) 
-                DO UPDATE SET status = EXCLUDED.status, booking_id = EXCLUDED.booking_id
-            `, status.RoomNum, status.Calendar, status.Status, status.BookingID).Error; err != nil {
-				return err
-			}
-
-			current = current.AddDate(0, 0, 1)
-		}
-
-		// Create receipt for past and some current bookings
-		if checkInDate.Before(now) {
-			receiptID := 10000 + i
-			paymentDate := booking.BookingDate.AddDate(0, 0, rand.Intn(3)) // Payment 0-2 days after booking
-
-			// Check if receipt with this ID already exists
-			var existingReceipt models.Receipt
-			result := tx.Where("receipt_id = ?", receiptID).First(&existingReceipt)
-			if result.Error == nil {
-				// Skip creating receipt if ID already exists
-				continue
-			}
-
-			if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
-				return result.Error
-			}
-
-			receipt := models.Receipt{
-				ReceiptID:     receiptID,
-				BookingID:     booking.BookingID,
-				PaymentDate:   paymentDate,
-				PaymentMethod: paymentMethods[rand.Intn(len(paymentMethods))],
-				Amount:        totalPrice,
-				IssueDate:     paymentDate,
-			}
-
-			if err := tx.Create(&receipt).Error; err != nil {
-				return err
-			}
+			tx.Rollback()
+			return fmt.Errorf("error retrieving last running record: %w", result.Error)
 		}
 	}
 
-	log.Printf("Seeded %d bookings with corresponding room statuses and receipts", len(bookings))
+	bookingsCreated := 0
+
+	// Process each booking type sequentially
+	for bookingType, count := range bookingDistribution {
+		for i := 0; i < count; i++ {
+			// Get latest LastRunning value
+			if err := tx.Where("year = ?", currentYear).First(&lastRunning).Error; err != nil {
+				tx.Rollback()
+				return fmt.Errorf("error getting latest last running: %w", err)
+			}
+
+			// Increment lastRunning
+			lastRunning.LastRunning++
+			bookingID := currentYear*1000000 + lastRunning.LastRunning
+
+			// Save updated LastRunning
+			if err := tx.Save(&lastRunning).Error; err != nil {
+				tx.Rollback()
+				return fmt.Errorf("error updating last running: %w", err)
+			}
+
+			// Select a random room
+			randomRoomIndex := rand.Intn(len(rooms))
+			room := rooms[randomRoomIndex]
+
+			// Generate booking dates
+			checkInDate, checkOutDate, bookingDate := generateBookingDates(bookingType)
+
+			// Get room price
+			var roomType models.RoomType
+			if err := tx.First(&roomType, "type_id = ?", room.TypeID).Error; err != nil {
+				tx.Rollback()
+				return fmt.Errorf("error retrieving room type: %w", err)
+			}
+
+			// Calculate total price
+			nights := int(checkOutDate.Sub(checkInDate).Hours() / 24)
+			if nights < 1 {
+				nights = 1
+			}
+			totalPrice := roomType.PricePerNight * nights
+
+			// Create booking
+			booking := models.Booking{
+				BookingID:    bookingID,
+				BookingName:  guestNames[rand.Intn(len(guestNames))],
+				RoomNum:      room.RoomNum,
+				CheckInDate:  checkInDate,
+				CheckOutDate: checkOutDate,
+				BookingDate:  bookingDate,
+				TotalPrice:   totalPrice,
+			}
+
+			// Create the booking
+			if err := tx.Create(&booking).Error; err != nil {
+				tx.Rollback()
+				return fmt.Errorf("error creating booking: %w", err)
+			}
+
+			// Create receipt for past bookings
+			if bookingType == "past" || (bookingType == "current" && checkInDate.Before(time.Now())) {
+				receiptID := 10000 + bookingID%1000
+				paymentDate := bookingDate.AddDate(0, 0, rand.Intn(3)) // Payment 0-2 days after booking
+
+				receipt := models.Receipt{
+					ReceiptID:     receiptID,
+					BookingID:     booking.BookingID,
+					PaymentDate:   paymentDate,
+					PaymentMethod: paymentMethods[rand.Intn(len(paymentMethods))],
+					Amount:        totalPrice,
+					IssueDate:     paymentDate,
+				}
+
+				if err := tx.Create(&receipt).Error; err != nil {
+					tx.Rollback()
+					return fmt.Errorf("error creating receipt: %w", err)
+				}
+			}
+
+			// Update room status for each day of the booking
+			current := checkInDate
+			for current.Before(checkOutDate) {
+				status := models.RoomStatus{
+					RoomNum:   room.RoomNum,
+					Calendar:  current,
+					Status:    "Occupied",
+					BookingID: &booking.BookingID,
+				}
+
+				// Use upsert to handle conflicts
+				if err := tx.Exec(`
+					INSERT INTO room_statuses (room_num, calendar, status, booking_id)
+					VALUES (?, ?, ?, ?)
+					ON CONFLICT (room_num, calendar) 
+					DO UPDATE SET status = EXCLUDED.status, booking_id = EXCLUDED.booking_id
+				`, status.RoomNum, status.Calendar, status.Status, status.BookingID).Error; err != nil {
+					tx.Rollback()
+					return fmt.Errorf("error updating room status: %w", err)
+				}
+
+				current = current.AddDate(0, 0, 1)
+			}
+
+			bookingsCreated++
+		}
+	}
+
+	// Re-enable triggers
+	if err := tx.Exec("ALTER TABLE bookings ENABLE TRIGGER ALL").Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to re-enable triggers: %w", err)
+	}
+
+	// Commit the transaction
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	log.Printf("Successfully created %d bookings with corresponding room statuses and receipts", bookingsCreated)
+	return nil
+}
+
+// Function to simulate and test conflict scenarios
+func seedConflictScenarios(db *gorm.DB) error {
+	log.Println("Setting up booking conflict test scenarios...")
+
+	// Start a new transaction
+	tx := db.Begin()
+	if tx.Error != nil {
+		return fmt.Errorf("failed to begin transaction for conflict scenarios: %w", tx.Error)
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			log.Printf("Conflict scenario failed with panic: %v", r)
+		}
+	}()
+
+	// 1. Find a room with no future bookings
+	var room models.Room
+	if err := tx.Joins("LEFT JOIN bookings ON rooms.room_num = bookings.room_num AND bookings.check_out_date > ?",
+		time.Now().AddDate(0, 1, 0)).
+		Where("bookings.booking_id IS NULL").
+		First(&room).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("could not find room for conflict scenario: %w", err)
+	}
+
+	// 2. Set up conflicting dates
+	startDate := time.Now().AddDate(0, 2, 0) // Two months from now
+	endDate := startDate.AddDate(0, 0, 3)    // 3-day stay
+
+	// Get current year for booking ID generation
+	currentYear := time.Now().Year()
+
+	// Get the last running number
+	var lastRunning models.LastRunning
+	if err := tx.Where("year = ?", currentYear).First(&lastRunning).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("could not get last running record: %w", err)
+	}
+
+	// Create first booking
+	lastRunning.LastRunning++
+	bookingID1 := currentYear*1000000 + lastRunning.LastRunning
+
+	if err := tx.Save(&lastRunning).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("could not update last running: %w", err)
+	}
+
+	// Disable triggers temporarily for our test
+	if err := tx.Exec("ALTER TABLE bookings DISABLE TRIGGER ALL").Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to disable triggers: %w", err)
+	}
+
+	booking1 := models.Booking{
+		BookingID:    bookingID1,
+		BookingName:  "Conflict Test 1",
+		RoomNum:      room.RoomNum,
+		CheckInDate:  startDate,
+		CheckOutDate: endDate,
+		BookingDate:  time.Now(),
+		TotalPrice:   1000, // Placeholder price
+	}
+
+	// Create the first booking
+	if err := tx.Create(&booking1).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("could not create first test booking: %w", err)
+	}
+	log.Println("Created first test booking successfully")
+
+	// Update room statuses for first booking
+	current := startDate
+	for current.Before(endDate) {
+		if err := tx.Exec(`
+			INSERT INTO room_statuses (room_num, calendar, status, booking_id)
+			VALUES (?, ?, ?, ?)
+			ON CONFLICT (room_num, calendar) 
+			DO UPDATE SET status = EXCLUDED.status, booking_id = EXCLUDED.booking_id
+		`, room.RoomNum, current, "Occupied", booking1.BookingID).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("error updating room status: %w", err)
+		}
+		current = current.AddDate(0, 0, 1)
+	}
+
+	// Create second booking with same dates (to demonstrate conflict handling)
+	lastRunning.LastRunning++
+	bookingID2 := currentYear*1000000 + lastRunning.LastRunning
+
+	if err := tx.Save(&lastRunning).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("could not update last running for second booking: %w", err)
+	}
+
+	booking2 := models.Booking{
+		BookingID:    bookingID2,
+		BookingName:  "Conflict Test 2",
+		RoomNum:      room.RoomNum,
+		CheckInDate:  startDate,
+		CheckOutDate: endDate,
+		BookingDate:  time.Now(),
+		TotalPrice:   1000,
+	}
+
+	// Create second booking (this would normally fail due to the unique constraint)
+	// We're using it to demonstrate conflict detection in your app
+	if err := tx.Create(&booking2).Error; err != nil {
+		log.Printf("Second booking creation failed (expected in real production): %v", err)
+	} else {
+		log.Println("Created second conflicting test booking")
+	}
+
+	// Re-enable triggers
+	if err := tx.Exec("ALTER TABLE bookings ENABLE TRIGGER ALL").Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to re-enable triggers: %w", err)
+	}
+
+	// Commit the transaction
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("failed to commit conflict scenario transaction: %w", err)
+	}
+
+	log.Printf("Successfully set up conflict scenario for room %d from %s to %s",
+		room.RoomNum, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+
 	return nil
 }

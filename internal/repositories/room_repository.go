@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"github.com/panuvitpnv/room-booking-api/internal/models"
-	"github.com/panuvitpnv/room-booking-api/internal/utils/concurrency"
 	"gorm.io/gorm"
 )
 
@@ -20,51 +19,174 @@ func NewRoomRepository(db *gorm.DB) *RoomRepository {
 	}
 }
 
-// GetAllRooms retrieves all rooms with their room types
-func (r *RoomRepository) GetAllRooms(tx *gorm.DB) ([]models.Room, error) {
+// GetAllRoomsWithDetails retrieves all rooms with their types and facilities
+func (r *RoomRepository) GetAllRoomsWithDetails(tx *gorm.DB) ([]models.Room, error) {
+	// First, get all rooms with their types
 	var rooms []models.Room
-	err := tx.Preload("RoomType").Order("room_num").Find(&rooms).Error
-	return rooms, err
+	if err := tx.Preload("RoomType").Find(&rooms).Error; err != nil {
+		return nil, err
+	}
+
+	// For each room type, get all facilities
+	for i, room := range rooms {
+		// Get all facility IDs for this room type
+		var roomFacilities []models.RoomFacility
+		if err := tx.Where("type_id = ?", room.TypeID).Find(&roomFacilities).Error; err != nil {
+			return nil, err
+		}
+
+		// Initialize the RoomFacilities array
+		rooms[i].RoomType.RoomFacilities = make([]models.RoomFacility, 0)
+
+		// For each facility ID, get the complete facility and add to room type
+		for _, rf := range roomFacilities {
+			var facility models.Facility
+			if err := tx.Where("fac_id = ?", rf.FacilityID).First(&facility).Error; err != nil {
+				continue // Skip if facility not found
+			}
+
+			// Create complete RoomFacility with Facility
+			completeRF := models.RoomFacility{
+				TypeID:     rf.TypeID,
+				FacilityID: rf.FacilityID,
+				Facility:   facility,
+			}
+
+			// Add to room's RoomFacilities
+			rooms[i].RoomType.RoomFacilities = append(rooms[i].RoomType.RoomFacilities, completeRF)
+		}
+	}
+
+	return rooms, nil
 }
 
-// GetRoomByID retrieves a room by its ID with its room type
-func (r *RoomRepository) GetRoomByID(tx *gorm.DB, roomNum int) (*models.Room, error) {
+// GetRoomWithDetails retrieves a room by ID with its type and facilities
+func (r *RoomRepository) GetRoomWithDetails(tx *gorm.DB, roomNum int) (*models.Room, error) {
+	// Get the room with its type
 	var room models.Room
-	err := tx.Preload("RoomType").First(&room, "room_num = ?", roomNum).Error
-	if err != nil {
+	if err := tx.Preload("RoomType").Where("room_num = ?", roomNum).First(&room).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("room not found")
 		}
 		return nil, err
 	}
-	return &room, nil
-}
 
-// GetRoomWithFacilities retrieves a room by ID with its room type and facilities
-func (r *RoomRepository) GetRoomWithFacilities(tx *gorm.DB, roomNum int) (*models.Room, error) {
-	var room models.Room
-	err := tx.Preload("RoomType.RoomFacilities.Facility").
-		First(&room, "room_num = ?", roomNum).Error
-
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("room not found")
-		}
+	// Get all facility IDs for this room type
+	var roomFacilities []models.RoomFacility
+	if err := tx.Where("type_id = ?", room.TypeID).Find(&roomFacilities).Error; err != nil {
 		return nil, err
+	}
+
+	// Initialize the RoomFacilities array
+	room.RoomType.RoomFacilities = make([]models.RoomFacility, 0)
+
+	// For each facility ID, get the complete facility and add to room type
+	for _, rf := range roomFacilities {
+		var facility models.Facility
+		if err := tx.Where("fac_id = ?", rf.FacilityID).First(&facility).Error; err != nil {
+			continue // Skip if facility not found
+		}
+
+		// Create complete RoomFacility with Facility
+		completeRF := models.RoomFacility{
+			TypeID:     rf.TypeID,
+			FacilityID: rf.FacilityID,
+			Facility:   facility,
+		}
+
+		// Add to room's RoomFacilities
+		room.RoomType.RoomFacilities = append(room.RoomType.RoomFacilities, completeRF)
 	}
 
 	return &room, nil
 }
 
-// GetRoomsByType retrieves all rooms of a specific room type
-func (r *RoomRepository) GetRoomsByType(tx *gorm.DB, typeID int) ([]models.Room, error) {
+// GetRoomsByTypeWithDetails retrieves all rooms of a specific room type with facilities
+func (r *RoomRepository) GetRoomsByTypeWithDetails(tx *gorm.DB, typeID int) ([]models.Room, error) {
+	// Get rooms of this type
 	var rooms []models.Room
-	err := tx.Preload("RoomType").
-		Where("type_id = ?", typeID).
-		Order("room_num").
-		Find(&rooms).Error
+	if err := tx.Preload("RoomType").Where("type_id = ?", typeID).Find(&rooms).Error; err != nil {
+		return nil, err
+	}
 
-	return rooms, err
+	if len(rooms) == 0 {
+		return []models.Room{}, nil
+	}
+
+	// Get all facility IDs for this room type
+	var roomFacilities []models.RoomFacility
+	if err := tx.Where("type_id = ?", typeID).Find(&roomFacilities).Error; err != nil {
+		return nil, err
+	}
+
+	// Get all facilities for these IDs
+	facilityMap := make(map[int]models.Facility)
+	for _, rf := range roomFacilities {
+		var facility models.Facility
+		if err := tx.Where("fac_id = ?", rf.FacilityID).First(&facility).Error; err == nil {
+			facilityMap[rf.FacilityID] = facility
+		}
+	}
+
+	// Create complete RoomFacility objects with Facility
+	completeFacilities := make([]models.RoomFacility, 0)
+	for _, rf := range roomFacilities {
+		if facility, exists := facilityMap[rf.FacilityID]; exists {
+			completeFacilities = append(completeFacilities, models.RoomFacility{
+				TypeID:     rf.TypeID,
+				FacilityID: rf.FacilityID,
+				Facility:   facility,
+			})
+		}
+	}
+
+	// Add the same facilities to all rooms of this type
+	for i := range rooms {
+		rooms[i].RoomType.RoomFacilities = completeFacilities
+	}
+
+	return rooms, nil
+}
+
+// GetAllRoomTypes retrieves all room types with their facilities
+func (r *RoomRepository) GetAllRoomTypes(tx *gorm.DB) ([]models.RoomType, error) {
+	// Get all room types
+	var roomTypes []models.RoomType
+	if err := tx.Find(&roomTypes).Error; err != nil {
+		return nil, err
+	}
+
+	// For each room type, get all facilities
+	for i, roomType := range roomTypes {
+		// Get all facility IDs for this room type
+		var roomFacilities []models.RoomFacility
+		if err := tx.Where("type_id = ?", roomType.TypeID).Find(&roomFacilities).Error; err != nil {
+			return nil, err
+		}
+
+		// Initialize the RoomFacilities array
+		roomTypes[i].RoomFacilities = make([]models.RoomFacility, 0)
+
+		// For each facility ID, get the complete facility and add to room type
+		for _, rf := range roomFacilities {
+			var facility models.Facility
+			if err := tx.Where("fac_id = ?", rf.FacilityID).First(&facility).Error; err != nil {
+				continue // Skip if facility not found
+			}
+
+			// Create complete RoomFacility with Facility
+			completeRF := models.RoomFacility{
+				TypeID:     rf.TypeID,
+				FacilityID: rf.FacilityID,
+				Facility:   facility,
+			}
+
+			// Add to room type's RoomFacilities
+			roomTypes[i].RoomFacilities = append(roomTypes[i].RoomFacilities, completeRF)
+		}
+	}
+
+	return roomTypes, nil
 }
 
 // GetRoomCalendar retrieves the room status calendar for a specific room and date range
@@ -77,55 +199,4 @@ func (r *RoomRepository) GetRoomCalendar(tx *gorm.DB, roomNum int, startDate, en
 		Find(&statuses).Error
 
 	return statuses, err
-}
-
-// GetAllRoomTypes retrieves all room types with their facilities
-func (r *RoomRepository) GetAllRoomTypes(tx *gorm.DB) ([]models.RoomType, error) {
-	var roomTypes []models.RoomType
-
-	err := concurrency.WithSelectForShare(tx).
-		Preload("RoomFacilities.Facility").
-		Order("type_id").
-		Find(&roomTypes).Error
-
-	return roomTypes, err
-}
-
-// GetRoomTypeByID retrieves a room type by ID with its facilities
-func (r *RoomRepository) GetRoomTypeByID(tx *gorm.DB, typeID int) (*models.RoomType, error) {
-	var roomType models.RoomType
-
-	err := tx.Preload("RoomFacilities.Facility").
-		First(&roomType, "type_id = ?", typeID).Error
-
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("room type not found")
-		}
-		return nil, err
-	}
-
-	return &roomType, nil
-}
-
-// GetAllFacilities retrieves all facilities
-func (r *RoomRepository) GetAllFacilities(tx *gorm.DB) ([]models.Facility, error) {
-	var facilities []models.Facility
-	err := tx.Order("fac_id").Find(&facilities).Error
-	return facilities, err
-}
-
-// GetFacilityByID retrieves a facility by ID
-func (r *RoomRepository) GetFacilityByID(tx *gorm.DB, facilityID int) (*models.Facility, error) {
-	var facility models.Facility
-
-	err := tx.First(&facility, "fac_id = ?", facilityID).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("facility not found")
-		}
-		return nil, err
-	}
-
-	return &facility, nil
 }

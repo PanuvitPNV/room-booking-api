@@ -339,394 +339,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/demos/concurrent-bookings": {
-            "get": {
-                "description": "Demonstrates how pessimistic locking prevents double booking",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "demos"
-                ],
-                "summary": "Concurrent Booking Demo",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Room number",
-                        "name": "roomNum",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Check-in date (YYYY-MM-DD)",
-                        "name": "checkIn",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Check-out date (YYYY-MM-DD)",
-                        "name": "checkOut",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.DemoResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/demos/dirty-read/{id}": {
-            "get": {
-                "description": "Demonstrates the dirty read problem in database transactions",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "demos"
-                ],
-                "summary": "Dirty Read Demo",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Booking ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.DemoResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/demos/lost-update-with-locking/{id}": {
-            "get": {
-                "description": "Demonstrates how pessimistic locking prevents lost updates",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "demos"
-                ],
-                "summary": "Lost Update Prevention Demo",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Booking ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.DemoResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/demos/lost-update/{id}": {
-            "get": {
-                "description": "Demonstrates the lost update problem in concurrent transactions",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "demos"
-                ],
-                "summary": "Lost Update Demo",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Booking ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.DemoResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/demos/phantom-read": {
-            "get": {
-                "description": "Demonstrates the phantom read problem in database transactions",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "demos"
-                ],
-                "summary": "Phantom Read Demo",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Check-in date (YYYY-MM-DD)",
-                        "name": "checkIn",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Check-out date (YYYY-MM-DD)",
-                        "name": "checkOut",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.DemoResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/demos/serialization-anomaly": {
-            "get": {
-                "description": "Demonstrates serialization anomaly in database transactions",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "demos"
-                ],
-                "summary": "Serialization Anomaly Demo",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.DemoResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/facilities": {
-            "get": {
-                "description": "Retrieve all room facilities",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "facilities"
-                ],
-                "summary": "Get all facilities",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/models.Facility"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/facilities/{id}": {
-            "get": {
-                "description": "Retrieve a specific facility",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "facilities"
-                ],
-                "summary": "Get a facility by ID",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Facility ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.Facility"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/receipts": {
             "post": {
                 "description": "Create a payment receipt for a booking with transaction control",
@@ -988,57 +600,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.RoomType"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/room-types/{id}": {
-            "get": {
-                "description": "Retrieve a specific room type with its facilities",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "room-types"
-                ],
-                "summary": "Get a room type by ID",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Room Type ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.RoomType"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
+                                "$ref": "#/definitions/models.RoomTypeResponse"
                             }
                         }
                     },
@@ -1056,7 +618,7 @@ const docTemplate = `{
         },
         "/rooms": {
             "get": {
-                "description": "Retrieve all hotel rooms with their types",
+                "description": "Retrieve all hotel rooms with their types and facilities",
                 "consumes": [
                     "application/json"
                 ],
@@ -1066,14 +628,14 @@ const docTemplate = `{
                 "tags": [
                     "rooms"
                 ],
-                "summary": "Get all rooms",
+                "summary": "Get all rooms with details",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.Room"
+                                "$ref": "#/definitions/models.RoomResponse"
                             }
                         }
                     },
@@ -1091,7 +653,7 @@ const docTemplate = `{
         },
         "/rooms/type/{typeId}": {
             "get": {
-                "description": "Retrieve all rooms of a specific room type",
+                "description": "Retrieve all rooms of a specific room type with facilities",
                 "consumes": [
                     "application/json"
                 ],
@@ -1101,7 +663,7 @@ const docTemplate = `{
                 "tags": [
                     "rooms"
                 ],
-                "summary": "Get rooms by type",
+                "summary": "Get rooms by type with details",
                 "parameters": [
                     {
                         "type": "integer",
@@ -1117,7 +679,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.Room"
+                                "$ref": "#/definitions/models.RoomResponse"
                             }
                         }
                     },
@@ -1135,7 +697,7 @@ const docTemplate = `{
         },
         "/rooms/{id}": {
             "get": {
-                "description": "Retrieve a specific room by its room number",
+                "description": "Retrieve a specific room with its type and facilities",
                 "consumes": [
                     "application/json"
                 ],
@@ -1145,7 +707,7 @@ const docTemplate = `{
                 "tags": [
                     "rooms"
                 ],
-                "summary": "Get a room by ID",
+                "summary": "Get a room with details",
                 "parameters": [
                     {
                         "type": "integer",
@@ -1159,7 +721,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Room"
+                            "$ref": "#/definitions/models.RoomResponse"
                         }
                     },
                     "404": {
@@ -1249,56 +811,6 @@ const docTemplate = `{
                     }
                 }
             }
-        },
-        "/rooms/{id}/facilities": {
-            "get": {
-                "description": "Retrieve a specific room with all its facilities",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "rooms"
-                ],
-                "summary": "Get a room with its facilities",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Room Number",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.Room"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
         }
     },
     "definitions": {
@@ -1321,20 +833,6 @@ const docTemplate = `{
                 },
                 "receipt": {
                     "$ref": "#/definitions/models.Receipt"
-                }
-            }
-        },
-        "handlers.DemoResponse": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string"
-                },
-                "result": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
                 }
             }
         },
@@ -1412,7 +910,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.Facility": {
+        "models.FacilityResponse": {
             "type": "object",
             "properties": {
                 "fac_id": {
@@ -1420,12 +918,6 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
-                },
-                "room_facilities": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.RoomFacility"
-                    }
                 }
             }
         },
@@ -1499,6 +991,34 @@ const docTemplate = `{
                 }
             }
         },
+        "models.RoomFacilityResponse": {
+            "type": "object",
+            "properties": {
+                "fac_id": {
+                    "type": "integer"
+                },
+                "facility": {
+                    "$ref": "#/definitions/models.FacilityResponse"
+                },
+                "type_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.RoomResponse": {
+            "type": "object",
+            "properties": {
+                "room_num": {
+                    "type": "integer"
+                },
+                "room_type": {
+                    "$ref": "#/definitions/models.RoomTypeResponse"
+                },
+                "type_id": {
+                    "type": "integer"
+                }
+            }
+        },
         "models.RoomStatus": {
             "type": "object",
             "required": [
@@ -1555,6 +1075,35 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/models.Room"
                     }
+                },
+                "type_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.RoomTypeResponse": {
+            "type": "object",
+            "properties": {
+                "area": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "facilities": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.RoomFacilityResponse"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "noOfGuest": {
+                    "type": "integer"
+                },
+                "price_per_night": {
+                    "type": "integer"
                 },
                 "type_id": {
                     "type": "integer"
