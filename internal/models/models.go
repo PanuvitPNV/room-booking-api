@@ -26,7 +26,7 @@ type RoomFacility struct {
 	TypeID     int      `gorm:"primaryKey;column:type_id" json:"type_id"`
 	FacilityID int      `gorm:"primaryKey;column:fac_id" json:"fac_id"`
 	RoomType   RoomType `gorm:"foreignKey:TypeID;references:TypeID" json:"-"`
-	Facility   Facility `gorm:"foreignKey:FacilityID;references:FacilityID" json:"-"`
+	Facility   Facility `gorm:"foreignKey:FacilityID;references:FacilityID" json:"facility"` // Include this in JSON
 }
 
 // Room represents an actual room in the hotel

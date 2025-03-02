@@ -6,7 +6,7 @@ tmp_dir = "tmp"
   # Just use main.go for binary name
   bin = "./tmp/main"
   # Adjust build command to target your main.go location
-  cmd = "go build -o ./tmp/main ./cmd/main.go"
+  cmd = "go build -o ./tmp/main ./cmd/api/main.go"
   # Watch these file extensions
   include_ext = ["go", "yaml", "toml"]
   # Ignore these directories

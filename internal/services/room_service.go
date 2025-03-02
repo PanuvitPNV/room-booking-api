@@ -1,60 +1,107 @@
 package services
 
 import (
-	"errors"
+	"context"
 	"time"
+
+	"gorm.io/gorm"
 
 	"github.com/panuvitpnv/room-booking-api/internal/models"
 	"github.com/panuvitpnv/room-booking-api/internal/repositories"
-	"gorm.io/gorm"
+	"github.com/panuvitpnv/room-booking-api/internal/utils"
 )
 
-// RoomService handles business logic for rooms
+// RoomService handles room-related business logic
 type RoomService struct {
-	db       *gorm.DB
-	roomRepo *repositories.RoomRepository
+	roomRepo    *repositories.RoomRepository
+	lockManager *utils.LockManager
 }
 
-// NewRoomService creates a new RoomService
-func NewRoomService(db *gorm.DB, roomRepo *repositories.RoomRepository) *RoomService {
+// NewRoomService creates a new room service
+func NewRoomService(
+	roomRepo *repositories.RoomRepository,
+	lockManager *utils.LockManager,
+) *RoomService {
 	return &RoomService{
-		db:       db,
-		roomRepo: roomRepo,
+		roomRepo:    roomRepo,
+		lockManager: lockManager,
 	}
 }
 
-// GetAllRoomsWithDetails retrieves all rooms with their types and facilities
-func (s *RoomService) GetAllRoomsWithDetails(tx *gorm.DB) ([]models.Room, error) {
-	return s.roomRepo.GetAllRoomsWithDetails(tx)
+// GetAllRooms retrieves all rooms
+func (s *RoomService) GetAllRooms(ctx context.Context) ([]models.Room, error) {
+	var rooms []models.Room
+	var err error
+
+	err = utils.WithTransaction(ctx, func(tx *gorm.DB) error {
+		rooms, err = s.roomRepo.GetAllRooms(tx)
+		return err
+	})
+
+	return rooms, err
 }
 
-// GetRoomWithDetails retrieves a room by ID with its type and facilities
-func (s *RoomService) GetRoomWithDetails(tx *gorm.DB, roomNum int) (*models.Room, error) {
-	return s.roomRepo.GetRoomWithDetails(tx, roomNum)
+// GetRoomByNumber retrieves a room by its number
+func (s *RoomService) GetRoomByNumber(ctx context.Context, roomNum int) (*models.Room, error) {
+	var room *models.Room
+	var err error
+
+	err = utils.WithTransaction(ctx, func(tx *gorm.DB) error {
+		room, err = s.roomRepo.GetRoomByNumber(tx, roomNum)
+		return err
+	})
+
+	return room, err
 }
 
-// GetRoomsByTypeWithDetails retrieves all rooms of a specific type with facilities
-func (s *RoomService) GetRoomsByTypeWithDetails(tx *gorm.DB, typeID int) ([]models.Room, error) {
-	return s.roomRepo.GetRoomsByTypeWithDetails(tx, typeID)
+// GetRoomStatusForDateRange gets the status of a room for each day in a date range
+func (s *RoomService) GetRoomStatusForDateRange(ctx context.Context, roomNum int, startDate, endDate time.Time) ([]models.RoomStatus, error) {
+	var statuses []models.RoomStatus
+	var err error
+
+	err = utils.WithTransaction(ctx, func(tx *gorm.DB) error {
+		statuses, err = s.roomRepo.GetRoomStatusForDateRange(tx, roomNum, startDate, endDate)
+		return err
+	})
+
+	return statuses, err
 }
 
-// GetAllRoomTypes retrieves all room types with their facilities
-func (s *RoomService) GetAllRoomTypes(tx *gorm.DB) ([]models.RoomType, error) {
-	return s.roomRepo.GetAllRoomTypes(tx)
+// GetRoomTypes retrieves all room types
+func (s *RoomService) GetRoomTypes(ctx context.Context) ([]models.RoomType, error) {
+	var roomTypes []models.RoomType
+	var err error
+
+	err = utils.WithTransaction(ctx, func(tx *gorm.DB) error {
+		roomTypes, err = s.roomRepo.GetRoomTypes(tx)
+		return err
+	})
+
+	return roomTypes, err
 }
 
-// GetRoomCalendar retrieves the availability calendar for a room
-func (s *RoomService) GetRoomCalendar(tx *gorm.DB, roomNum int, startDate, endDate string) ([]models.RoomStatus, error) {
-	// Validate date format
-	_, err := time.Parse("2006-01-02", startDate)
-	if err != nil {
-		return nil, errors.New("invalid start date format, use YYYY-MM-DD")
-	}
+// GetRoomsByType retrieves all rooms of a specific type
+func (s *RoomService) GetRoomsByType(ctx context.Context, typeID int) ([]models.Room, error) {
+	var rooms []models.Room
+	var err error
 
-	_, err = time.Parse("2006-01-02", endDate)
-	if err != nil {
-		return nil, errors.New("invalid end date format, use YYYY-MM-DD")
-	}
+	err = utils.WithTransaction(ctx, func(tx *gorm.DB) error {
+		rooms, err = s.roomRepo.GetRoomsByType(tx, typeID)
+		return err
+	})
 
-	return s.roomRepo.GetRoomCalendar(tx, roomNum, startDate, endDate)
+	return rooms, err
+}
+
+// GetRoomAvailabilitySummary gets availability summary for all rooms in a date range
+func (s *RoomService) GetRoomAvailabilitySummary(ctx context.Context, startDate, endDate time.Time) (map[int]map[string]int, error) {
+	var summary map[int]map[string]int
+	var err error
+
+	err = utils.WithTransaction(ctx, func(tx *gorm.DB) error {
+		summary, err = s.roomRepo.GetRoomAvailabilitySummary(tx, startDate, endDate)
+		return err
+	})
+
+	return summary, err
 }

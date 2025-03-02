@@ -3,10 +3,11 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/panuvitpnv/room-booking-api/internal/api/middleware"
-	responseModels "github.com/panuvitpnv/room-booking-api/internal/api/models"
+	"github.com/labstack/gommon/log"
+
 	"github.com/panuvitpnv/room-booking-api/internal/services"
 )
 
@@ -15,185 +16,217 @@ type RoomHandler struct {
 	roomService *services.RoomService
 }
 
-// NewRoomHandler creates a new RoomHandler
+// NewRoomHandler creates a new room handler
 func NewRoomHandler(roomService *services.RoomService) *RoomHandler {
 	return &RoomHandler{
 		roomService: roomService,
 	}
 }
 
-// RegisterRoutes registers all room routes
-func (h *RoomHandler) RegisterRoutes(e *echo.Echo) {
-	rooms := e.Group("/api/rooms")
+// GetAllRooms retrieves all rooms
+// @Summary Get all rooms
+// @Description Get all rooms with their types
+// @Tags rooms
+// @Produce json
+// @Success 200 {array} models.Room
+// @Failure 500 {object} map[string]string
+// @Router /rooms [get]
+func (h *RoomHandler) GetAllRooms(c echo.Context) error {
+	ctx := c.Request().Context()
 
-	// Simplified endpoints for UI
-	rooms.GET("", h.GetAllRoomsWithDetails)
-	rooms.GET("/:id", h.GetRoomWithDetails)
-	rooms.GET("/type/:typeId", h.GetRoomsByTypeWithDetails)
-	rooms.GET("/:id/calendar", h.GetRoomCalendar)
-
-	roomTypes := e.Group("/api/room-types")
-	roomTypes.GET("", h.GetAllRoomTypes)
-}
-
-// GetAllRoomsWithDetails godoc
-// @Summary      Get all rooms with details
-// @Description  Retrieve all hotel rooms with their types and facilities
-// @Tags         rooms
-// @Accept       json
-// @Produce      json
-// @Success      200  {array}   models.RoomResponse
-// @Failure      500  {object}  map[string]string
-// @Router       /rooms [get]
-func (h *RoomHandler) GetAllRoomsWithDetails(c echo.Context) error {
-	tx := middleware.GetTransaction(c)
-
-	rooms, err := h.roomService.GetAllRoomsWithDetails(tx)
+	rooms, err := h.roomService.GetAllRooms(ctx)
 	if err != nil {
+		log.Errorf("Failed to get rooms: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to retrieve rooms: " + err.Error(),
+			"error": "Failed to get rooms: " + err.Error(),
 		})
 	}
 
-	// Convert to response model
-	response := responseModels.ConvertRoomsToResponse(rooms)
-
-	return c.JSON(http.StatusOK, response)
+	return c.JSON(http.StatusOK, rooms)
 }
 
-// GetRoomWithDetails godoc
-// @Summary      Get a room with details
-// @Description  Retrieve a specific room with its type and facilities
-// @Tags         rooms
-// @Accept       json
-// @Produce      json
-// @Param        id   path      integer  true  "Room Number"
-// @Success      200  {object}  models.RoomResponse
-// @Failure      404  {object}  map[string]string
-// @Failure      500  {object}  map[string]string
-// @Router       /rooms/{id} [get]
-func (h *RoomHandler) GetRoomWithDetails(c echo.Context) error {
-	roomNumStr := c.Param("id")
-	roomNum, err := strconv.Atoi(roomNumStr)
+// GetRoomByNumber retrieves a room by number
+// @Summary Get a room by number
+// @Description Get a room by its room number
+// @Tags rooms
+// @Produce json
+// @Param roomNum path int true "Room Number"
+// @Success 200 {object} models.Room
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /rooms/{roomNum} [get]
+func (h *RoomHandler) GetRoomByNumber(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	roomNum, err := strconv.Atoi(c.Param("roomNum"))
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Invalid room number",
 		})
 	}
 
-	tx := middleware.GetTransaction(c)
-
-	room, err := h.roomService.GetRoomWithDetails(tx, roomNum)
+	room, err := h.roomService.GetRoomByNumber(ctx, roomNum)
 	if err != nil {
+		log.Errorf("Failed to get room: %v", err)
 		return c.JSON(http.StatusNotFound, map[string]string{
-			"error": "Room not found: " + err.Error(),
+			"error": "Room not found",
 		})
 	}
 
-	// Convert to response model
-	response := responseModels.ConvertToRoomResponse(*room)
-
-	return c.JSON(http.StatusOK, response)
+	return c.JSON(http.StatusOK, room)
 }
 
-// GetRoomsByTypeWithDetails godoc
-// @Summary      Get rooms by type with details
-// @Description  Retrieve all rooms of a specific room type with facilities
-// @Tags         rooms
-// @Accept       json
-// @Produce      json
-// @Param        typeId   path      integer  true  "Room Type ID"
-// @Success      200  {array}   models.RoomResponse
-// @Failure      500  {object}  map[string]string
-// @Router       /rooms/type/{typeId} [get]
-func (h *RoomHandler) GetRoomsByTypeWithDetails(c echo.Context) error {
-	typeIDStr := c.Param("typeId")
-	typeID, err := strconv.Atoi(typeIDStr)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid room type ID",
-		})
-	}
-
-	tx := middleware.GetTransaction(c)
-
-	rooms, err := h.roomService.GetRoomsByTypeWithDetails(tx, typeID)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to retrieve rooms: " + err.Error(),
-		})
-	}
-
-	// Convert to response model
-	response := responseModels.ConvertRoomsToResponse(rooms)
-
-	return c.JSON(http.StatusOK, response)
+// GetRoomStatusRequest represents a request to get room status for a date range
+type GetRoomStatusRequest struct {
+	StartDate time.Time `json:"start_date" validate:"required"`
+	EndDate   time.Time `json:"end_date" validate:"required"`
 }
 
-// GetRoomCalendar godoc
-// @Summary      Get room calendar
-// @Description  Retrieve the availability calendar for a specific room
-// @Tags         rooms
-// @Accept       json
-// @Produce      json
-// @Param        id         path      integer  true  "Room Number"
-// @Param        startDate  query     string   true  "Start Date (YYYY-MM-DD)"
-// @Param        endDate    query     string   true  "End Date (YYYY-MM-DD)"
-// @Success      200  {array}   models.RoomStatus
-// @Failure      400  {object}  map[string]string
-// @Failure      500  {object}  map[string]string
-// @Router       /rooms/{id}/calendar [get]
-func (h *RoomHandler) GetRoomCalendar(c echo.Context) error {
-	roomNumStr := c.Param("id")
-	roomNum, err := strconv.Atoi(roomNumStr)
+// GetRoomStatus retrieves room status for a date range
+// @Summary Get room status
+// @Description Get room status for a specific room and date range
+// @Tags rooms
+// @Accept json
+// @Produce json
+// @Param roomNum path int true "Room Number"
+// @Param dates body GetRoomStatusRequest true "Date range"
+// @Success 200 {array} models.RoomStatus
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /rooms/{roomNum}/status [post]
+func (h *RoomHandler) GetRoomStatus(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	roomNum, err := strconv.Atoi(c.Param("roomNum"))
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Invalid room number",
 		})
 	}
 
-	startDate := c.QueryParam("startDate")
-	endDate := c.QueryParam("endDate")
-
-	if startDate == "" || endDate == "" {
+	var req GetRoomStatusRequest
+	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "startDate and endDate query parameters are required",
+			"error": "Invalid request data: " + err.Error(),
 		})
 	}
 
-	tx := middleware.GetTransaction(c)
-
-	statuses, err := h.roomService.GetRoomCalendar(tx, roomNum, startDate, endDate)
-	if err != nil {
+	if err := c.Validate(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Failed to retrieve room calendar: " + err.Error(),
+			"error": "Validation failed: " + err.Error(),
+		})
+	}
+
+	statuses, err := h.roomService.GetRoomStatusForDateRange(ctx, roomNum, req.StartDate, req.EndDate)
+	if err != nil {
+		log.Errorf("Failed to get room status: %v", err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to get room status: " + err.Error(),
 		})
 	}
 
 	return c.JSON(http.StatusOK, statuses)
 }
 
-// GetAllRoomTypes godoc
-// @Summary      Get all room types
-// @Description  Retrieve all room types with their facilities
-// @Tags         room-types
-// @Accept       json
-// @Produce      json
-// @Success      200  {array}   models.RoomTypeResponse
-// @Failure      500  {object}  map[string]string
-// @Router       /room-types [get]
-func (h *RoomHandler) GetAllRoomTypes(c echo.Context) error {
-	tx := middleware.GetTransaction(c)
+// GetRoomTypes retrieves all room types
+// @Summary Get all room types
+// @Description Get all available room types
+// @Tags rooms
+// @Produce json
+// @Success 200 {array} models.RoomType
+// @Failure 500 {object} map[string]string
+// @Router /rooms/types [get]
+func (h *RoomHandler) GetRoomTypes(c echo.Context) error {
+	ctx := c.Request().Context()
 
-	roomTypes, err := h.roomService.GetAllRoomTypes(tx)
+	roomTypes, err := h.roomService.GetRoomTypes(ctx)
 	if err != nil {
+		log.Errorf("Failed to get room types: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to retrieve room types: " + err.Error(),
+			"error": "Failed to get room types: " + err.Error(),
 		})
 	}
 
-	// Convert to response model
-	response := responseModels.ConvertRoomTypesToResponse(roomTypes)
+	return c.JSON(http.StatusOK, roomTypes)
+}
 
-	return c.JSON(http.StatusOK, response)
+// GetRoomsByType retrieves rooms by type
+// @Summary Get rooms by type
+// @Description Get all rooms of a specific type
+// @Tags rooms
+// @Produce json
+// @Param typeId path int true "Room Type ID"
+// @Success 200 {array} models.Room
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /rooms/type/{typeId} [get]
+func (h *RoomHandler) GetRoomsByType(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	typeID, err := strconv.Atoi(c.Param("typeId"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid room type ID",
+		})
+	}
+
+	rooms, err := h.roomService.GetRoomsByType(ctx, typeID)
+	if err != nil {
+		log.Errorf("Failed to get rooms: %v", err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to get rooms: " + err.Error(),
+		})
+	}
+
+	return c.JSON(http.StatusOK, rooms)
+}
+
+// GetRoomAvailabilityRequest represents a request to get room availability summary
+type GetRoomAvailabilityRequest struct {
+	StartDate time.Time `json:"start_date" validate:"required"`
+	EndDate   time.Time `json:"end_date" validate:"required"`
+}
+
+// GetRoomAvailabilitySummary retrieves room availability summary
+// @Summary Get room availability summary
+// @Description Get availability summary for all rooms in a date range
+// @Tags rooms
+// @Accept json
+// @Produce json
+// @Param request body GetRoomAvailabilityRequest true "Date range"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /rooms/availability [post]
+func (h *RoomHandler) GetRoomAvailabilitySummary(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	var req GetRoomAvailabilityRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid request data: " + err.Error(),
+		})
+	}
+
+	if err := c.Validate(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Validation failed: " + err.Error(),
+		})
+	}
+
+	summary, err := h.roomService.GetRoomAvailabilitySummary(ctx, req.StartDate, req.EndDate)
+	if err != nil {
+		log.Errorf("Failed to get room availability: %v", err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to get room availability: " + err.Error(),
+		})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"summary": summary,
+		"period": map[string]string{
+			"start_date": req.StartDate.Format("2006-01-02"),
+			"end_date":   req.EndDate.Format("2006-01-02"),
+		},
+	})
 }

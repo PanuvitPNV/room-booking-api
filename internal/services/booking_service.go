@@ -3,173 +3,270 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
+
+	"gorm.io/gorm"
 
 	"github.com/panuvitpnv/room-booking-api/internal/models"
 	"github.com/panuvitpnv/room-booking-api/internal/repositories"
-	"gorm.io/gorm"
+	"github.com/panuvitpnv/room-booking-api/internal/utils"
 )
 
-// BookingService handles business logic for bookings
+// BookingService handles booking business logic
 type BookingService struct {
-	db          *gorm.DB
 	bookingRepo *repositories.BookingRepository
+	roomRepo    *repositories.RoomRepository
+	lockManager *utils.LockManager
 }
 
-// NewBookingService creates a new BookingService
-func NewBookingService(db *gorm.DB, bookingRepo *repositories.BookingRepository) *BookingService {
+// NewBookingService creates a new booking service
+func NewBookingService(
+	bookingRepo *repositories.BookingRepository,
+	roomRepo *repositories.RoomRepository,
+	lockManager *utils.LockManager,
+) *BookingService {
 	return &BookingService{
-		db:          db,
 		bookingRepo: bookingRepo,
+		roomRepo:    roomRepo,
+		lockManager: lockManager,
 	}
 }
 
-// BookingRequest represents a request to create or update a booking
-type BookingRequest struct {
-	BookingName  string    `json:"booking_name" validate:"required"`
-	RoomNum      int       `json:"room_num" validate:"required"`
-	CheckInDate  time.Time `json:"check_in_date" validate:"required"`
-	CheckOutDate time.Time `json:"check_out_date" validate:"required"`
-}
-
-// PaymentRequest represents a payment for a booking
-type PaymentRequest struct {
-	PaymentMethod string    `json:"payment_method" validate:"required,oneof=Credit Debit Bank Transfer"`
-	PaymentDate   time.Time `json:"payment_date" validate:"required"`
-}
-
-// CheckRoomAvailability checks if a room is available for the requested dates
-func (s *BookingService) CheckRoomAvailability(ctx context.Context, tx *gorm.DB, roomNum int, checkIn, checkOut time.Time) (bool, error) {
-	return s.bookingRepo.CheckRoomAvailability(ctx, tx, roomNum, checkIn, checkOut)
-}
-
-// GetBooking retrieves a booking by ID
-func (s *BookingService) GetBooking(tx *gorm.DB, bookingID int) (*models.Booking, error) {
-	return s.bookingRepo.GetBookingByID(tx, bookingID)
-}
-
-// UpdateBooking updates an existing booking
-func (s *BookingService) UpdateBooking(ctx context.Context, tx *gorm.DB, bookingID int, req BookingRequest) (*models.Booking, error) {
-	// Basic validation
-	if req.CheckInDate.After(req.CheckOutDate) || req.CheckInDate.Equal(req.CheckOutDate) {
-		return nil, errors.New("check-in date must be before check-out date")
+// CreateBooking handles the creation of a new booking with transaction management
+func (s *BookingService) CreateBooking(ctx context.Context, booking *models.Booking) error {
+	// Validate booking dates
+	if booking.CheckInDate.IsZero() || booking.CheckOutDate.IsZero() {
+		return errors.New("check-in and check-out dates are required")
 	}
 
-	if req.CheckInDate.Before(time.Now()) {
-		return nil, errors.New("cannot update booking to start in the past")
+	if booking.CheckOutDate.Before(booking.CheckInDate) || booking.CheckOutDate.Equal(booking.CheckInDate) {
+		return errors.New("check-out date must be after check-in date")
 	}
 
-	// Get existing booking
-	existingBooking, err := s.bookingRepo.GetBookingByID(tx, bookingID)
+	if booking.CheckInDate.Before(time.Now()) {
+		return errors.New("check-in date cannot be in the past")
+	}
+
+	// Acquire a lock on the room to prevent concurrent bookings
+	// This is an application-level lock before we even start the DB transaction
+	unlock, err := s.lockManager.AcquireLock("room", booking.RoomNum)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
+	defer unlock()
 
-	// Update fields
-	existingBooking.BookingName = req.BookingName
-	existingBooking.RoomNum = req.RoomNum
-	existingBooking.CheckInDate = req.CheckInDate
-	existingBooking.CheckOutDate = req.CheckOutDate
+	// Execute booking creation within a transaction with retries
+	return utils.RunWithRetry(3, func() error {
+		return utils.WithTransaction(ctx, func(tx *gorm.DB) error {
+			// Check if the room exists
+			_, err := s.roomRepo.GetRoomByNumber(tx, booking.RoomNum)
+			if err != nil {
+				return fmt.Errorf("failed to find room: %w", err)
+			}
 
-	// Use the repository to handle database operations with concurrency control
-	err = s.bookingRepo.UpdateBooking(ctx, tx, existingBooking)
-	if err != nil {
-		return nil, err
-	}
+			// Check if the room is available for the requested dates
+			available, err := s.bookingRepo.IsRoomAvailable(tx, booking.RoomNum, booking.CheckInDate, booking.CheckOutDate)
+			if err != nil {
+				return fmt.Errorf("failed to check room availability: %w", err)
+			}
 
-	// Retrieve the updated booking
-	return s.bookingRepo.GetBookingByID(tx, bookingID)
+			if !available {
+				return errors.New("room is not available for the requested dates")
+			}
+
+			// Create the booking
+			if err := s.bookingRepo.CreateBooking(tx, booking); err != nil {
+				return fmt.Errorf("failed to create booking: %w", err)
+			}
+
+			return nil
+		})
+	})
 }
 
-// CancelBooking cancels a booking
-func (s *BookingService) CancelBooking(ctx context.Context, tx *gorm.DB, bookingID int) error {
-	return s.bookingRepo.CancelBooking(ctx, tx, bookingID)
-}
-
-// SearchAvailableRooms finds available rooms for a specific date range and guest count
-func (s *BookingService) SearchAvailableRooms(tx *gorm.DB, checkInDate, checkOutDate time.Time, guestCount int) ([]models.Room, error) {
-	// Basic validation
-	if checkInDate.After(checkOutDate) || checkInDate.Equal(checkOutDate) {
-		return nil, errors.New("check-in date must be before check-out date")
-	}
-
-	return s.bookingRepo.SearchAvailableRooms(tx, checkInDate, checkOutDate, guestCount)
-}
-
-// CreateBookingWithPayment creates a booking and processes payment in a single atomic transaction
-// Implements "first to pay gets the room" business logic
-func (s *BookingService) CreateBookingWithPayment(
-	ctx context.Context,
-	bookingReq BookingRequest,
-	paymentReq PaymentRequest,
-) (*models.Booking, *models.Receipt, error) {
-	// Validate booking request
-	if bookingReq.CheckInDate.After(bookingReq.CheckOutDate) || bookingReq.CheckInDate.Equal(bookingReq.CheckOutDate) {
-		return nil, nil, errors.New("check-in date must be before check-out date")
-	}
-
-	if bookingReq.CheckInDate.Before(time.Now()) {
-		return nil, nil, errors.New("cannot book a room in the past")
-	}
-
+// GetBookingByID retrieves a booking by ID
+func (s *BookingService) GetBookingByID(ctx context.Context, bookingID int) (*models.Booking, error) {
 	var booking *models.Booking
-	var receipt *models.Receipt
+	var err error
 
-	// Execute the entire operation in a single transaction to ensure atomicity
-	err := s.db.Transaction(func(tx *gorm.DB) error {
-		// First check room availability with locking to prevent race conditions
-		available, err := s.bookingRepo.CheckRoomAvailability(
-			ctx,
-			tx,
-			bookingReq.RoomNum,
-			bookingReq.CheckInDate,
-			bookingReq.CheckOutDate,
-		)
-		if err != nil {
-			return err
-		}
+	err = utils.WithTransaction(ctx, func(tx *gorm.DB) error {
+		booking, err = s.bookingRepo.GetBookingByID(tx, bookingID)
+		return err
+	})
 
-		if !available {
-			return errors.New("room is not available for the selected dates")
-		}
+	return booking, err
+}
 
-		// Create booking model
-		booking = &models.Booking{
-			BookingName:  bookingReq.BookingName,
-			RoomNum:      bookingReq.RoomNum,
-			CheckInDate:  bookingReq.CheckInDate,
-			CheckOutDate: bookingReq.CheckOutDate,
-			BookingDate:  time.Now(),
-		}
-
-		// Create receipt model
-		receipt = &models.Receipt{
-			PaymentDate:   paymentReq.PaymentDate,
-			PaymentMethod: paymentReq.PaymentMethod,
-			IssueDate:     time.Now(),
-		}
-
-		// Create booking with payment in a single operation
-		// This ensures that payment and booking are created atomically
-		if err := s.bookingRepo.CreateBooking(ctx, tx, booking, receipt); err != nil {
-			return err
-		}
-
-		// Get the complete booking with all relationships
-		completeBooking, err := s.bookingRepo.GetBookingByID(tx, booking.BookingID)
-		if err != nil {
-			return err
-		}
-
-		// Update our reference to include all loaded relationships
-		*booking = *completeBooking
-
-		return nil
+// CancelBooking cancels a booking with transaction management
+func (s *BookingService) CancelBooking(ctx context.Context, bookingID int) error {
+	// First get the booking details to know which room to lock
+	var booking *models.Booking
+	err := utils.WithTransaction(ctx, func(tx *gorm.DB) error {
+		var err error
+		booking, err = s.bookingRepo.GetBookingByID(tx, bookingID)
+		return err
 	})
 
 	if err != nil {
-		return nil, nil, err
+		return fmt.Errorf("failed to find booking: %w", err)
 	}
 
-	return booking, receipt, nil
+	// Acquire a lock on the room to prevent race conditions
+	unlock, err := s.lockManager.AcquireLock("room", booking.RoomNum)
+	if err != nil {
+		return fmt.Errorf("failed to acquire lock: %w", err)
+	}
+	defer unlock()
+
+	// Execute cancellation within a transaction with retries
+	return utils.RunWithRetry(3, func() error {
+		return utils.WithTransaction(ctx, func(tx *gorm.DB) error {
+			return s.bookingRepo.CancelBooking(tx, bookingID)
+		})
+	})
+}
+
+// GetAvailableRooms finds available rooms for a date range
+func (s *BookingService) GetAvailableRooms(ctx context.Context, startDate, endDate time.Time) ([]models.Room, error) {
+	if startDate.IsZero() || endDate.IsZero() {
+		return nil, errors.New("start and end dates are required")
+	}
+
+	if endDate.Before(startDate) || endDate.Equal(startDate) {
+		return nil, errors.New("end date must be after start date")
+	}
+
+	var rooms []models.Room
+	var err error
+
+	err = utils.WithTransaction(ctx, func(tx *gorm.DB) error {
+		rooms, err = s.bookingRepo.GetAvailableRoomsByDateRange(tx, startDate, endDate)
+		return err
+	})
+
+	return rooms, err
+}
+
+// UpdateBooking updates an existing booking with optimistic concurrency control
+func (s *BookingService) UpdateBooking(ctx context.Context, bookingID int, newCheckIn, newCheckOut time.Time) error {
+	// Validate new dates
+	if newCheckIn.IsZero() || newCheckOut.IsZero() {
+		return errors.New("check-in and check-out dates are required")
+	}
+
+	if newCheckOut.Before(newCheckIn) || newCheckOut.Equal(newCheckIn) {
+		return errors.New("check-out date must be after check-in date")
+	}
+
+	if newCheckIn.Before(time.Now()) {
+		return errors.New("check-in date cannot be in the past")
+	}
+
+	// First get the booking to know which room to lock
+	var booking *models.Booking
+	err := utils.WithTransaction(ctx, func(tx *gorm.DB) error {
+		var err error
+		booking, err = s.bookingRepo.GetBookingByID(tx, bookingID)
+		return err
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to find booking: %w", err)
+	}
+
+	// Acquire a lock on the room
+	unlock, err := s.lockManager.AcquireLock("room", booking.RoomNum)
+	if err != nil {
+		return fmt.Errorf("failed to acquire lock: %w", err)
+	}
+	defer unlock()
+
+	// Execute update with retries for optimistic concurrency control
+	return utils.RunWithRetry(3, func() error {
+		return utils.WithTransaction(ctx, func(tx *gorm.DB) error {
+			// Calculate total price for new dates
+			room, err := s.roomRepo.GetRoomByNumber(tx, booking.RoomNum)
+			if err != nil {
+				return fmt.Errorf("failed to find room: %w", err)
+			}
+
+			nights := int(newCheckOut.Sub(newCheckIn).Hours() / 24)
+			if nights < 1 {
+				return errors.New("booking must be for at least one night")
+			}
+
+			newTotalPrice := room.RoomType.PricePerNight * nights
+
+			// Check if the room is available for the new dates, excluding this booking's current dates
+			var occupiedDaysCount int64
+			err = tx.Model(&models.RoomStatus{}).
+				Where("room_num = ? AND calendar >= ? AND calendar < ? AND status = ? AND (booking_id IS NULL OR booking_id != ?)",
+					booking.RoomNum, newCheckIn.Format("2006-01-02"), newCheckOut.Format("2006-01-02"), "Occupied", bookingID).
+				Count(&occupiedDaysCount).Error
+
+			if err != nil {
+				return fmt.Errorf("failed to check room availability: %w", err)
+			}
+
+			if occupiedDaysCount > 0 {
+				return errors.New("room is not available for the new dates")
+			}
+
+			// First, update room statuses for the old dates to Available
+			if err := tx.Model(&models.RoomStatus{}).
+				Where("room_num = ? AND booking_id = ?", booking.RoomNum, bookingID).
+				Updates(map[string]interface{}{
+					"status":     "Available",
+					"booking_id": nil,
+				}).Error; err != nil {
+				return fmt.Errorf("failed to update room statuses: %w", err)
+			}
+
+			// Then update booking data
+			updateData := map[string]interface{}{
+				"check_in_date":  newCheckIn,
+				"check_out_date": newCheckOut,
+				"total_price":    newTotalPrice,
+			}
+
+			if err := s.bookingRepo.UpdateBooking(tx, bookingID, updateData); err != nil {
+				return fmt.Errorf("failed to update booking: %w", err)
+			}
+
+			// Finally, create new room status entries for the new dates
+			current := newCheckIn
+			for current.Before(newCheckOut) {
+				status := models.RoomStatus{
+					RoomNum:   booking.RoomNum,
+					Calendar:  current,
+					Status:    "Occupied",
+					BookingID: &bookingID,
+				}
+
+				if err := tx.Save(&status).Error; err != nil {
+					return fmt.Errorf("failed to update room status: %w", err)
+				}
+
+				current = current.AddDate(0, 0, 1)
+			}
+
+			return nil
+		})
+	})
+}
+
+// GetBookingsByDateRange gets all bookings within a date range
+func (s *BookingService) GetBookingsByDateRange(ctx context.Context, startDate, endDate time.Time) ([]models.Booking, error) {
+	var bookings []models.Booking
+
+	err := utils.WithTransaction(ctx, func(tx *gorm.DB) error {
+		return tx.
+			Preload("Room.RoomType").
+			Where("(check_in_date BETWEEN ? AND ?) OR (check_out_date BETWEEN ? AND ?)",
+				startDate, endDate, startDate, endDate).
+			Find(&bookings).Error
+	})
+
+	return bookings, err
 }

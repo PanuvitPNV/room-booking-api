@@ -1,139 +1,108 @@
 package repositories
 
 import (
-	"context"
 	"errors"
+	"fmt"
 	"time"
 
-	"github.com/panuvitpnv/room-booking-api/internal/models"
-	"github.com/panuvitpnv/room-booking-api/internal/utils/concurrency"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	"github.com/panuvitpnv/room-booking-api/internal/models"
 )
 
 // BookingRepository handles database operations for bookings
 type BookingRepository struct {
-	db       *gorm.DB
-	roomLock *concurrency.RoomLock
+	db *gorm.DB
 }
 
-// NewBookingRepository creates a new BookingRepository
+// NewBookingRepository creates a new booking repository
 func NewBookingRepository(db *gorm.DB) *BookingRepository {
 	return &BookingRepository{
-		db:       db,
-		roomLock: concurrency.NewRoomLock(db),
+		db: db,
 	}
 }
 
-// CheckRoomAvailability checks if a room is available for the requested dates
-func (r *BookingRepository) CheckRoomAvailability(ctx context.Context, tx *gorm.DB, roomNum int, checkInDate, checkOutDate time.Time) (bool, error) {
-	// Lock the room for the date range to prevent concurrent availability checks
-	if err := r.roomLock.LockRoomDateRange(ctx, tx, roomNum, checkInDate, checkOutDate); err != nil {
-		return false, err
-	}
+// IsRoomAvailable checks if a room is available for the specified dates
+func (r *BookingRepository) IsRoomAvailable(tx *gorm.DB, roomNum int, checkIn, checkOut time.Time) (bool, error) {
+	var count int64
 
-	// Check if the room is available for the requested dates
-	var conflictCount int64
+	// Find any overlapping bookings for this room
 	err := tx.Model(&models.RoomStatus{}).
-		Where("room_num = ? AND calendar BETWEEN ? AND ? AND status = 'Occupied'",
-			roomNum,
-			checkInDate.Format("2006-01-02"),
-			checkOutDate.Format("2006-01-02")).
-		Count(&conflictCount).Error
+		Where("room_num = ? AND calendar >= ? AND calendar < ? AND status = ?",
+			roomNum, checkIn.Format("2006-01-02"), checkOut.Format("2006-01-02"), "Occupied").
+		Count(&count).Error
 
 	if err != nil {
 		return false, err
 	}
 
-	return conflictCount == 0, nil
+	return count == 0, nil
 }
 
-// CreateBooking creates a new booking with payment in a single transaction (payment-first logic)
-func (r *BookingRepository) CreateBooking(ctx context.Context, tx *gorm.DB, booking *models.Booking, payment *models.Receipt) error {
-	// Check if the room exists
-	var room models.Room
-	if err := tx.First(&room, "room_num = ?", booking.RoomNum).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("room not found")
-		}
-		return err
-	}
-
-	// Check room availability with locking
-	available, err := r.CheckRoomAvailability(ctx, tx, booking.RoomNum, booking.CheckInDate, booking.CheckOutDate)
-	if err != nil {
-		return err
-	}
-
-	if !available {
-		return errors.New("room is not available for the selected dates")
-	}
-
-	// Generate booking ID (year + running number)
+// CreateBooking creates a new booking with optimistic locking
+func (r *BookingRepository) CreateBooking(tx *gorm.DB, booking *models.Booking) error {
+	// Get the last used booking ID number
 	var lastRunning models.LastRunning
-	currentYear := time.Now().Year()
-
-	// Get or create LastRunning record for current year with row-level locking
-	err = tx.Clauses(clause.Locking{
-		Strength: "UPDATE",
-	}).FirstOrCreate(&lastRunning, models.LastRunning{Year: currentYear}).Error
-	if err != nil {
-		return err
-	}
-
-	// Increment the running number atomically
-	lastRunning.LastRunning++
-	if err := tx.Save(&lastRunning).Error; err != nil {
-		return err
-	}
-
-	// Set the booking ID (format: YYYYXXXXXX)
-	booking.BookingID = currentYear*1000000 + lastRunning.LastRunning
-
-	// Set current timestamp for booking date if not provided
-	if booking.BookingDate.IsZero() {
-		booking.BookingDate = time.Now()
-	}
-
-	// Calculate the total price based on the room type's price per night and stay duration
-	var roomType models.RoomType
-	if err := tx.Model(&models.RoomType{}).
-		Select("price_per_night").
-		Joins("JOIN rooms ON rooms.type_id = room_types.type_id").
-		Where("rooms.room_num = ?", booking.RoomNum).
-		First(&roomType).Error; err != nil {
-		return err
-	}
-
-	// Calculate number of nights
-	nights := int(booking.CheckOutDate.Sub(booking.CheckInDate).Hours() / 24)
-	if nights < 1 {
-		nights = 1 // Minimum 1 night
-	}
-	booking.TotalPrice = roomType.PricePerNight * nights
-
-	// Create the booking within the transaction
-	if err := tx.Create(booking).Error; err != nil {
-		return err
-	}
-
-	// Process payment
-	if payment != nil {
-		payment.BookingID = booking.BookingID
-		payment.Amount = booking.TotalPrice
-
-		if payment.IssueDate.IsZero() {
-			payment.IssueDate = time.Now()
-		}
-
-		if err := tx.Create(payment).Error; err != nil {
+	if err := tx.First(&lastRunning).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// Initialize if not exists
+			lastRunning = models.LastRunning{LastRunning: 0, Year: time.Now().Year()}
+			if err := tx.Create(&lastRunning).Error; err != nil {
+				return err
+			}
+		} else {
 			return err
 		}
 	}
 
-	// Update room status for each day of the booking
+	// Update with optimistic locking
+	result := tx.Model(&models.LastRunning{}).
+		Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("last_running = ?", lastRunning.LastRunning).
+		Updates(map[string]interface{}{
+			"last_running": lastRunning.LastRunning + 1,
+		})
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.New("failed to update last running number due to concurrent modification")
+	}
+
+	// Set booking ID
+	booking.BookingID = lastRunning.LastRunning + 1
+
+	// Check room availability with pessimistic locking
+	var roomType models.RoomType
+	if err := tx.Model(&models.Room{}).
+		Select("room_types.price_per_night").
+		Joins("JOIN room_types ON rooms.type_id = room_types.type_id"). // Fixed: 'room' to 'rooms'
+		Where("rooms.room_num = ?", booking.RoomNum).                   // Fixed: 'room' to 'rooms'
+		First(&roomType).Error; err != nil {
+		return err
+	}
+
+	// Calculate total price and nights
+	nights := int(booking.CheckOutDate.Sub(booking.CheckInDate).Hours() / 24)
+	if nights < 1 {
+		return errors.New("check-out date must be at least one day after check-in date")
+	}
+
+	booking.TotalPrice = roomType.PricePerNight * nights
+	booking.BookingDate = time.Now()
+
+	// Create the booking
+	if err := tx.Create(booking).Error; err != nil {
+		return err
+	}
+
+	// Update room statuses for each day of the booking
+	// This marks the room as occupied for the booking period
 	current := booking.CheckInDate
-	for current.Before(booking.CheckOutDate) || current.Equal(booking.CheckOutDate) {
+	for current.Before(booking.CheckOutDate) {
 		status := models.RoomStatus{
 			RoomNum:   booking.RoomNum,
 			Calendar:  current,
@@ -141,7 +110,7 @@ func (r *BookingRepository) CreateBooking(ctx context.Context, tx *gorm.DB, book
 			BookingID: &booking.BookingID,
 		}
 
-		// Use upsert to handle potential existing records
+		// Upsert room status using ON CONFLICT DO UPDATE
 		if err := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "room_num"}, {Name: "calendar"}},
 			DoUpdates: clause.AssignmentColumns([]string{"status", "booking_id"}),
@@ -158,159 +127,105 @@ func (r *BookingRepository) CreateBooking(ctx context.Context, tx *gorm.DB, book
 // GetBookingByID retrieves a booking by its ID
 func (r *BookingRepository) GetBookingByID(tx *gorm.DB, bookingID int) (*models.Booking, error) {
 	var booking models.Booking
-	err := tx.Preload("Room.RoomType").
-		Preload("Receipt").
-		First(&booking, "booking_id = ?", bookingID).Error
+	err := tx.Preload("Room.RoomType").First(&booking, bookingID).Error
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("booking not found")
-		}
 		return nil, err
 	}
 	return &booking, nil
 }
 
-// UpdateBooking updates an existing booking with optimistic concurrency control
-func (r *BookingRepository) UpdateBooking(ctx context.Context, tx *gorm.DB, booking *models.Booking) error {
-	// Get the current booking to check for changes
-	var existingBooking models.Booking
-	if err := tx.First(&existingBooking, "booking_id = ?", booking.BookingID).Error; err != nil {
-		return err
-	}
-
-	// Lock the room for the booking date range to prevent concurrent modifications
-	if err := r.roomLock.LockRoomDateRange(ctx, tx, booking.RoomNum, booking.CheckInDate, booking.CheckOutDate); err != nil {
-		return err
-	}
-
-	// Check if dates have changed
-	datesChanged := !existingBooking.CheckInDate.Equal(booking.CheckInDate) ||
-		!existingBooking.CheckOutDate.Equal(booking.CheckOutDate) ||
-		existingBooking.RoomNum != booking.RoomNum
-
-	if datesChanged {
-		// Check if the room is available for the new dates
-		var conflictCount int64
-		err := tx.Model(&models.RoomStatus{}).
-			Where("room_num = ? AND calendar BETWEEN ? AND ? AND status = 'Occupied' AND booking_id != ?",
-				booking.RoomNum,
-				booking.CheckInDate.Format("2006-01-02"),
-				booking.CheckOutDate.Format("2006-01-02"),
-				booking.BookingID).
-			Count(&conflictCount).Error
-
-		if err != nil {
-			return err
-		}
-
-		if conflictCount > 0 {
-			return errors.New("room is not available for the selected dates")
-		}
-
-		// Clear old room status entries
-		if err := tx.Where("booking_id = ?", booking.BookingID).Delete(&models.RoomStatus{}).Error; err != nil {
-			return err
-		}
-
-		// Calculate the total price based on the room type's price per night and stay duration
-		var roomType models.RoomType
-		if err := tx.Model(&models.RoomType{}).
-			Select("price_per_night").
-			Joins("JOIN rooms ON rooms.type_id = room_types.type_id").
-			Where("rooms.room_num = ?", booking.RoomNum).
-			First(&roomType).Error; err != nil {
-			return err
-		}
-
-		// Calculate number of nights
-		nights := int(booking.CheckOutDate.Sub(booking.CheckInDate).Hours() / 24)
-		if nights < 1 {
-			nights = 1 // Minimum 1 night
-		}
-		booking.TotalPrice = roomType.PricePerNight * nights
-
-		// Create new room status entries
-		current := booking.CheckInDate
-		for current.Before(booking.CheckOutDate) || current.Equal(booking.CheckOutDate) {
-			status := models.RoomStatus{
-				RoomNum:   booking.RoomNum,
-				Calendar:  current,
-				Status:    "Occupied",
-				BookingID: &booking.BookingID,
-			}
-
-			// Use upsert to handle potential existing records
-			if err := tx.Clauses(clause.OnConflict{
-				Columns:   []clause.Column{{Name: "room_num"}, {Name: "calendar"}},
-				DoUpdates: clause.AssignmentColumns([]string{"status", "booking_id"}),
-			}).Create(&status).Error; err != nil {
-				return err
-			}
-
-			current = current.AddDate(0, 0, 1)
-		}
-	}
-
-	// Update the booking
-	return tx.Save(booking).Error
-}
-
-// CancelBooking cancels a booking and frees up the room
-func (r *BookingRepository) CancelBooking(ctx context.Context, tx *gorm.DB, bookingID int) error {
-	// Lock the booking record for update
+// CancelBooking cancels a booking and releases the room
+func (r *BookingRepository) CancelBooking(tx *gorm.DB, bookingID int) error {
+	// Get the booking with a lock to prevent concurrent modifications
 	var booking models.Booking
-	if err := tx.Clauses(clause.Locking{
-		Strength: "UPDATE",
-	}).First(&booking, "booking_id = ?", bookingID).Error; err != nil {
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+		First(&booking, bookingID).Error; err != nil {
 		return err
 	}
 
-	// Lock the room date range
-	if err := r.roomLock.LockRoomDateRange(ctx, tx, booking.RoomNum, booking.CheckInDate, booking.CheckOutDate); err != nil {
-		return err
-	}
-
-	// Check if there's a receipt (payment) for this booking
+	// Check if booking already has a receipt (payment)
 	var receiptCount int64
-	if err := tx.Model(&models.Receipt{}).Where("booking_id = ?", bookingID).Count(&receiptCount).Error; err != nil {
+	if err := tx.Model(&models.Receipt{}).
+		Where("booking_id = ?", bookingID).
+		Count(&receiptCount).Error; err != nil {
 		return err
 	}
 
 	if receiptCount > 0 {
-		// If paid, we might want to handle refunds or keep a record
-		// Here we'll just set the status to Cancelled but keep the record
-		return tx.Model(&models.RoomStatus{}).
-			Where("booking_id = ?", bookingID).
-			Update("status", "Available").
-			Update("booking_id", nil).Error
-	} else {
-		// If not paid, we can completely delete the booking
-		// First clear room status entries
-		if err := tx.Where("booking_id = ?", bookingID).Delete(&models.RoomStatus{}).Error; err != nil {
-			return err
-		}
-
-		// Then delete the booking itself
-		return tx.Delete(&booking).Error
+		return errors.New("cannot cancel a booking that has already been paid for")
 	}
+
+	// Update room statuses to available
+	if err := tx.Model(&models.RoomStatus{}).
+		Where("booking_id = ?", bookingID).
+		Updates(map[string]interface{}{
+			"status":     "Available",
+			"booking_id": nil,
+		}).Error; err != nil {
+		return err
+	}
+
+	// Delete the booking
+	if err := tx.Delete(&booking).Error; err != nil {
+		return err
+	}
+
+	return nil
 }
 
-// SearchAvailableRooms finds rooms available for a given date range
-func (r *BookingRepository) SearchAvailableRooms(tx *gorm.DB, checkInDate, checkOutDate time.Time, guestCount int) ([]models.Room, error) {
+// GetAvailableRoomsByDateRange finds available rooms for a date range
+func (r *BookingRepository) GetAvailableRoomsByDateRange(tx *gorm.DB, startDate, endDate time.Time) ([]models.Room, error) {
+	var rooms []models.Room
+
+	// First, get all rooms
+	if err := tx.Preload("RoomType").Find(&rooms).Error; err != nil {
+		return nil, err
+	}
+
+	// Filter out rooms that are already booked during the requested period
 	var availableRooms []models.Room
+	for _, room := range rooms {
+		var occupiedDaysCount int64
+		err := tx.Model(&models.RoomStatus{}).
+			Where("room_num = ? AND calendar >= ? AND calendar < ? AND status = ?",
+				room.RoomNum, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"), "Occupied").
+			Count(&occupiedDaysCount).Error
 
-	// Find rooms that are available for the entire date range and can accommodate the guest count
-	query := tx.Model(&models.Room{}).
-		Distinct("rooms.*").
-		Joins("JOIN room_types ON rooms.type_id = room_types.type_id").
-		Where("room_types.\"no_of_guest\" >= ?", guestCount).
-		// Subquery to exclude rooms that have any Occupied status during the requested period
-		Where("NOT EXISTS (SELECT 1 FROM room_statuses WHERE room_statuses.room_num = rooms.room_num "+
-			"AND room_statuses.calendar BETWEEN ? AND ? AND room_statuses.status = 'Occupied')",
-			checkInDate.Format("2006-01-02"), checkOutDate.Format("2006-01-02")).
-		Preload("RoomType").
-		Order("rooms.room_num")
+		if err != nil {
+			return nil, err
+		}
 
-	err := query.Find(&availableRooms).Error
-	return availableRooms, err
+		if occupiedDaysCount == 0 {
+			availableRooms = append(availableRooms, room)
+		}
+	}
+
+	return availableRooms, nil
+}
+
+// UpdateBooking updates an existing booking with optimistic concurrency control
+func (r *BookingRepository) UpdateBooking(tx *gorm.DB, bookingID int, updateData map[string]interface{}) error {
+	// Get current version to implement optimistic locking
+	var booking models.Booking
+	if err := tx.First(&booking, bookingID).Error; err != nil {
+		return err
+	}
+
+	// Ensure we have the updated_at timestamp for optimistic locking
+	currentUpdatedAt := booking.UpdatedAt
+
+	// Perform the update with optimistic locking
+	result := tx.Model(&models.Booking{}).
+		Where("booking_id = ? AND updated_at = ?", bookingID, currentUpdatedAt).
+		Updates(updateData)
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("booking %d was updated by another transaction, please retry", bookingID)
+	}
+
+	return nil
 }

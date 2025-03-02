@@ -6,7 +6,8 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/panuvitpnv/room-booking-api/internal/api/middleware"
+	"github.com/labstack/gommon/log"
+
 	"github.com/panuvitpnv/room-booking-api/internal/models"
 	"github.com/panuvitpnv/room-booking-api/internal/services"
 )
@@ -16,212 +17,250 @@ type ReceiptHandler struct {
 	receiptService *services.ReceiptService
 }
 
-// NewReceiptHandler creates a new ReceiptHandler
+// NewReceiptHandler creates a new receipt handler
 func NewReceiptHandler(receiptService *services.ReceiptService) *ReceiptHandler {
 	return &ReceiptHandler{
 		receiptService: receiptService,
 	}
 }
 
-// RegisterRoutes registers all receipt routes
-func (h *ReceiptHandler) RegisterRoutes(e *echo.Echo) {
-	receipts := e.Group("/api/receipts")
-
-	receipts.GET("/:id", h.GetReceiptByID)
-	receipts.GET("/booking/:bookingId", h.GetReceiptByBookingID)
-	receipts.POST("", h.CreateReceipt)
-	receipts.PUT("/:id", h.UpdateReceipt)
-	receipts.DELETE("/:id", h.DeleteReceipt)
+// CreateReceiptRequest represents a request to create a receipt
+type CreateReceiptRequest struct {
+	BookingID     int    `json:"booking_id" validate:"required"`
+	PaymentMethod string `json:"payment_method" validate:"required,oneof=Credit Debit Bank Transfer"`
+	Amount        int    `json:"amount" validate:"required,gt=0"`
 }
 
-// GetReceiptByID godoc
-// @Summary      Get receipt by ID
-// @Description  Retrieve a receipt by its ID
-// @Tags         receipts
-// @Accept       json
-// @Produce      json
-// @Param        id   path      integer  true  "Receipt ID"
-// @Success      200  {object}  models.Receipt
-// @Failure      400  {object}  map[string]string  "Bad request"
-// @Failure      404  {object}  map[string]string  "Receipt not found"
-// @Router       /receipts/{id} [get]
-func (h *ReceiptHandler) GetReceiptByID(c echo.Context) error {
-	// Parse receipt ID from path
-	receiptIDStr := c.Param("id")
-	receiptID, err := strconv.Atoi(receiptIDStr)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid receipt ID"})
-	}
-
-	// Get database transaction from context
-	tx := middleware.GetTransaction(c)
-
-	// Call service to get receipt
-	receipt, err := h.receiptService.GetReceiptByID(tx, receiptID)
-	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "Receipt not found: " + err.Error()})
-	}
-
-	return c.JSON(http.StatusOK, receipt)
-}
-
-// GetReceiptByBookingID godoc
-// @Summary      Get receipt by booking ID
-// @Description  Retrieve a receipt associated with a specific booking
-// @Tags         receipts
-// @Accept       json
-// @Produce      json
-// @Param        bookingId   path      integer  true  "Booking ID"
-// @Success      200  {object}  models.Receipt
-// @Failure      400  {object}  map[string]string  "Bad request"
-// @Failure      404  {object}  map[string]string  "Receipt not found"
-// @Router       /receipts/booking/{bookingId} [get]
-func (h *ReceiptHandler) GetReceiptByBookingID(c echo.Context) error {
-	// Parse booking ID from path
-	bookingIDStr := c.Param("bookingId")
-	bookingID, err := strconv.Atoi(bookingIDStr)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid booking ID"})
-	}
-
-	// Get database transaction from context
-	tx := middleware.GetTransaction(c)
-
-	// Call service to get receipt
-	receipt, err := h.receiptService.GetReceiptByBookingID(tx, bookingID)
-	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "Receipt not found: " + err.Error()})
-	}
-
-	return c.JSON(http.StatusOK, receipt)
-}
-
-// ReceiptRequest represents the request model for receipt operations
-type ReceiptRequest struct {
-	BookingID     int       `json:"booking_id" validate:"required"`
-	PaymentDate   time.Time `json:"payment_date" validate:"required"`
-	PaymentMethod string    `json:"payment_method" validate:"required,oneof=Credit Debit Bank Transfer"`
-	Amount        int       `json:"amount" validate:"required,min=1"`
-}
-
-// CreateReceipt godoc
-// @Summary      Create a new receipt
-// @Description  Create a payment receipt for a booking with transaction control
-// @Tags         receipts
-// @Accept       json
-// @Produce      json
-// @Param        receipt  body      ReceiptRequest  true  "Receipt details"
-// @Success      201      {object}  models.Receipt
-// @Failure      400      {object}  map[string]string  "Bad request"
-// @Router       /receipts [post]
+// CreateReceipt handles the creation of a payment receipt
+// @Summary Create a payment receipt
+// @Description Process payment for a booking
+// @Tags receipts
+// @Accept json
+// @Produce json
+// @Param receipt body CreateReceiptRequest true "Receipt details"
+// @Success 201 {object} models.Receipt
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /receipts [post]
 func (h *ReceiptHandler) CreateReceipt(c echo.Context) error {
-	// Parse request body
-	var req ReceiptRequest
+	ctx := c.Request().Context()
+
+	var req CreateReceiptRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid request data: " + err.Error(),
+		})
 	}
 
-	// Basic validation
-	if req.BookingID <= 0 || req.PaymentDate.IsZero() || req.PaymentMethod == "" || req.Amount <= 0 {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Missing or invalid required fields"})
+	if err := c.Validate(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Validation failed: " + err.Error(),
+		})
 	}
 
-	// Create receipt model
-	receipt := &models.Receipt{
+	receipt := models.Receipt{
 		BookingID:     req.BookingID,
-		PaymentDate:   req.PaymentDate,
 		PaymentMethod: req.PaymentMethod,
 		Amount:        req.Amount,
-		IssueDate:     time.Now(),
+		PaymentDate:   time.Now(),
 	}
 
-	// Get database transaction from context
-	tx := middleware.GetTransaction(c)
-
-	// Call service to create receipt
-	createdReceipt, err := h.receiptService.CreateReceipt(c.Request().Context(), tx, receipt)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Failed to create receipt: " + err.Error()})
+	if err := h.receiptService.CreateReceipt(ctx, &receipt); err != nil {
+		log.Errorf("Failed to create receipt: %v", err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to create receipt: " + err.Error(),
+		})
 	}
 
-	return c.JSON(http.StatusCreated, createdReceipt)
+	return c.JSON(http.StatusCreated, receipt)
 }
 
-// UpdateReceipt godoc
-// @Summary      Update a receipt
-// @Description  Update an existing receipt with transaction control
-// @Tags         receipts
-// @Accept       json
-// @Produce      json
-// @Param        id       path      integer         true  "Receipt ID"
-// @Param        receipt  body      ReceiptRequest  true  "Updated receipt details"
-// @Success      200      {object}  models.Receipt
-// @Failure      400      {object}  map[string]string  "Bad request"
-// @Failure      404      {object}  map[string]string  "Receipt not found"
-// @Router       /receipts/{id} [put]
-func (h *ReceiptHandler) UpdateReceipt(c echo.Context) error {
-	// Parse receipt ID from path
-	receiptIDStr := c.Param("id")
-	receiptID, err := strconv.Atoi(receiptIDStr)
+// GetReceipt retrieves a receipt by ID
+// @Summary Get a receipt
+// @Description Get a receipt by ID
+// @Tags receipts
+// @Produce json
+// @Param id path int true "Receipt ID"
+// @Success 200 {object} models.Receipt
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /receipts/{id} [get]
+func (h *ReceiptHandler) GetReceipt(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid receipt ID"})
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid receipt ID",
+		})
 	}
 
-	// Parse request body
-	var req ReceiptRequest
+	receipt, err := h.receiptService.GetReceiptByID(ctx, id)
+	if err != nil {
+		log.Errorf("Failed to get receipt: %v", err)
+		return c.JSON(http.StatusNotFound, map[string]string{
+			"error": "Receipt not found",
+		})
+	}
+
+	return c.JSON(http.StatusOK, receipt)
+}
+
+// GetReceiptByBooking retrieves a receipt by booking ID
+// @Summary Get receipt by booking
+// @Description Get a receipt associated with a booking
+// @Tags receipts
+// @Produce json
+// @Param bookingId path int true "Booking ID"
+// @Success 200 {object} models.Receipt
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /receipts/booking/{bookingId} [get]
+func (h *ReceiptHandler) GetReceiptByBooking(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	id, err := strconv.Atoi(c.Param("bookingId"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid booking ID",
+		})
+	}
+
+	receipt, err := h.receiptService.GetReceiptByBookingID(ctx, id)
+	if err != nil {
+		log.Errorf("Failed to get receipt: %v", err)
+		return c.JSON(http.StatusNotFound, map[string]string{
+			"error": "Receipt not found for booking",
+		})
+	}
+
+	return c.JSON(http.StatusOK, receipt)
+}
+
+// ProcessRefundRequest represents a request to process a refund
+type ProcessRefundRequest struct {
+	BookingID int `json:"booking_id" validate:"required"`
+}
+
+// ProcessRefund processes a refund for a booking
+// @Summary Process a refund
+// @Description Process a refund for a booking
+// @Tags receipts
+// @Accept json
+// @Produce json
+// @Param refund body ProcessRefundRequest true "Refund details"
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /receipts/refund [post]
+func (h *ReceiptHandler) ProcessRefund(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	var req ProcessRefundRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid request data: " + err.Error(),
+		})
 	}
 
-	// Get database transaction from context
-	tx := middleware.GetTransaction(c)
-
-	// Get existing receipt
-	existingReceipt, err := h.receiptService.GetReceiptByID(tx, receiptID)
-	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "Receipt not found: " + err.Error()})
+	if err := c.Validate(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Validation failed: " + err.Error(),
+		})
 	}
 
-	// Update fields
-	existingReceipt.PaymentDate = req.PaymentDate
-	existingReceipt.PaymentMethod = req.PaymentMethod
-	existingReceipt.Amount = req.Amount
-
-	// Call service to update receipt
-	updatedReceipt, err := h.receiptService.UpdateReceipt(c.Request().Context(), tx, existingReceipt)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Failed to update receipt: " + err.Error()})
+	if err := h.receiptService.ProcessRefund(ctx, req.BookingID); err != nil {
+		log.Errorf("Failed to process refund: %v", err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to process refund: " + err.Error(),
+		})
 	}
 
-	return c.JSON(http.StatusOK, updatedReceipt)
+	return c.JSON(http.StatusOK, map[string]string{
+		"message": "Refund processed successfully",
+	})
 }
 
-// DeleteReceipt godoc
-// @Summary      Delete a receipt
-// @Description  Delete an existing receipt with transaction control
-// @Tags         receipts
-// @Accept       json
-// @Produce      json
-// @Param        id   path      integer  true  "Receipt ID"
-// @Success      200  {object}  map[string]string  "Success message"
-// @Failure      400  {object}  map[string]string  "Bad request"
-// @Router       /receipts/{id} [delete]
-func (h *ReceiptHandler) DeleteReceipt(c echo.Context) error {
-	// Parse receipt ID from path
-	receiptIDStr := c.Param("id")
-	receiptID, err := strconv.Atoi(receiptIDStr)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid receipt ID"})
+// GetAllReceipts retrieves all receipts with pagination
+// @Summary Get all receipts
+// @Description Get all receipts with pagination
+// @Tags receipts
+// @Produce json
+// @Param page query int false "Page number" default(1)
+// @Param pageSize query int false "Page size" default(10)
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]string
+// @Router /receipts [get]
+func (h *ReceiptHandler) GetAllReceipts(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	page, err := strconv.Atoi(c.QueryParam("page"))
+	if err != nil || page < 1 {
+		page = 1
 	}
 
-	// Get database transaction from context
-	tx := middleware.GetTransaction(c)
-
-	// Call service to delete receipt
-	err = h.receiptService.DeleteReceipt(c.Request().Context(), tx, receiptID)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Failed to delete receipt: " + err.Error()})
+	pageSize, err := strconv.Atoi(c.QueryParam("pageSize"))
+	if err != nil || pageSize < 1 {
+		pageSize = 10
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{"message": "Receipt deleted successfully"})
+	receipts, total, err := h.receiptService.GetAllReceipts(ctx, page, pageSize)
+	if err != nil {
+		log.Errorf("Failed to get receipts: %v", err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to get receipts: " + err.Error(),
+		})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"receipts":   receipts,
+		"total":      total,
+		"page":       page,
+		"pageSize":   pageSize,
+		"totalPages": (total + int64(pageSize) - 1) / int64(pageSize),
+	})
+}
+
+// GetReceiptsByDateRangeRequest represents a request to find receipts in a date range
+type GetReceiptsByDateRangeRequest struct {
+	StartDate time.Time `json:"start_date" validate:"required"`
+	EndDate   time.Time `json:"end_date" validate:"required"`
+}
+
+// GetReceiptsByDateRange retrieves receipts for a date range
+// @Summary Get receipts by date range
+// @Description Get all receipts within a date range
+// @Tags receipts
+// @Accept json
+// @Produce json
+// @Param dates body GetReceiptsByDateRangeRequest true "Date range"
+// @Success 200 {array} models.Receipt
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /receipts/by-date [post]
+func (h *ReceiptHandler) GetReceiptsByDateRange(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	var req GetReceiptsByDateRangeRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid request data: " + err.Error(),
+		})
+	}
+
+	if err := c.Validate(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Validation failed: " + err.Error(),
+		})
+	}
+
+	receipts, err := h.receiptService.GetReceiptsByDateRange(ctx, req.StartDate, req.EndDate)
+	if err != nil {
+		log.Errorf("Failed to get receipts: %v", err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to get receipts: " + err.Error(),
+		})
+	}
+
+	return c.JSON(http.StatusOK, receipts)
 }
