@@ -1,0 +1,23 @@
+Hotel Booking System - Test Summary
+===================================
+Date: Thu Mar  6 04:12:43 +07 2025
+Test Configuration: Up to 50 concurrent users
+
+Transaction Summary:
+-------------------
+Total transactions: 10160
+Successful: 10160
+Failed: 0
+
+Concurrency Analysis:
+-------------------
+Detected concurrency issues: 0
+Row locking events: 0
+
+Performance Summary:
+-------------------
+Average response time: 5.90363 ms
+Slow transactions (>500ms): 0
+
+See Artillery HTML report: ./tests/artillery/reports/artillery-report.html
+See Custom Visualization report: ./tests/artillery/reports/visualization.html

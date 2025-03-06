@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ .Title }}</title>
+    <!-- Tailwind and DaisyUI CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@3.9.4/dist/full.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js - A lightweight JS framework -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.2/dist/cdn.min.js"></script>
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body class="bg-gray-100 min-h-screen" x-data="hotelBookingApp()">
+    <!-- Toast for notifications -->
+    <div class="toast toast-top toast-end z-50" x-show="notification.show" x-transition @click="notification.show = false">
+        <div class="alert" :class="notification.type">
+            <span x-text="notification.message"></span>
+        </div>
+    </div>
+
+    <!-- Loading indicator -->
+    <div class="fixed top-0 left-0 w-full h-full flex items-center justify-center bg-black bg-opacity-50 z-50" x-show="isLoading">
+        <span class="loading loading-spinner loading-lg text-primary"></span>
+    </div>
+
+    <!-- Navbar -->
+    {{ template "navbar.html" . }}
+
+    <!-- Main Content -->
+    <div class="container mx-auto px-4 py-8">
+        <!-- Rooms Tab -->
+        <div x-show="activeTab === 'rooms'">
+            {{ template "rooms-content.html" . }}
+        </div>
+        
+        <!-- Booking Tab -->
+        <div x-show="activeTab === 'booking'">
+            {{ template "booking-form-content.html" . }}
+        </div>
+        
+        <!-- Manage Booking Tab -->
+        <div x-show="activeTab === 'manage'">
+            {{ template "manage-booking-content.html" . }}
+        </div>
+    </div>
+
+    <!-- Footer -->
+    {{ template "footer.html" . }}
+
+    <!-- Custom JavaScript -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

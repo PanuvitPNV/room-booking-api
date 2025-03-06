@@ -1,0 +1,93 @@
+/* 
+ * Custom styles for Hotel Booking System
+ */
+
+/* Smooth transitions for theme changes */
+* {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Additional styling for form elements */
+.input:focus, .select:focus, .textarea:focus {
+    outline-offset: 2px;
+}
+
+/* Subtle hover effects for cards */
+.card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Room images */
+.card figure img {
+    transition: transform 0.3s ease;
+}
+
+.card:hover figure img {
+    transform: scale(1.05);
+}
+
+/* Custom badge styling */
+.badge-outline {
+    font-weight: normal;
+}
+
+/* Facility badges */
+.badge {
+    text-transform: none;
+    font-weight: normal;
+}
+
+/* Toast notifications */
+.toast {
+    z-index: 9999;
+}
+
+/* Loading overlay */
+.loading-spinner {
+    width: 3rem;
+    height: 3rem;
+}
+
+/* Modal styling */
+.modal-box {
+    max-width: 32rem;
+}
+
+/* Buttons with icons spacing */
+.btn svg {
+    margin-right: 0.25rem;
+}
+
+/* Form validation styling */
+input:invalid, select:invalid {
+    border-color: hsl(var(--er));
+}
+
+/* Responsive tables */
+@media (max-width: 640px) {
+    table {
+        display: block;
+        overflow-x: auto;
+    }
+}
+
+/* Placeholder images for rooms */
+.placeholder-image {
+    background: linear-gradient(135deg, hsl(var(--p)) 0%, hsl(var(--s)) 100%);
+    position: relative;
+    overflow: hidden;
+}
+
+.placeholder-image::after {
+    content: "🏨";
+    font-size: 2rem;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}

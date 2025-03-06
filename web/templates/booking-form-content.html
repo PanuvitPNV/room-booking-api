@@ -1,0 +1,310 @@
+{{define "booking-form-content.html"}}
+<h2 class="text-3xl font-bold mb-6 text-center">Book Your Stay</h2>
+
+<!-- Booking Form -->
+<div class="card bg-base-100 shadow-xl max-w-3xl mx-auto" id="booking-form-container">
+    <div class="card-body">
+        <form @submit.prevent="createBooking" id="booking-form" data-testid="booking-form">
+            <div class="form-control">
+                <label class="label">
+                    <span class="label-text">Full Name</span>
+                </label>
+                <input 
+                    type="text" 
+                    x-model="bookingForm.booking_name" 
+                    placeholder="Enter your full name" 
+                    class="input input-bordered" 
+                    required 
+                    id="booking_name"
+                    data-testid="booking-name-input"
+                />
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Check-in Date</span>
+                    </label>
+                    <input 
+                        type="date" 
+                        x-model="bookingForm.check_in_date" 
+                        class="input input-bordered" 
+                        required 
+                        :min="getTodayDate()" 
+                        @change="checkAvailability"
+                        id="check_in_date"
+                        data-testid="check-in-date" 
+                    />
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Check-out Date</span>
+                    </label>
+                    <input 
+                        type="date" 
+                        x-model="bookingForm.check_out_date" 
+                        class="input input-bordered" 
+                        required 
+                        :min="getMinCheckoutDate()" 
+                        @change="checkAvailability"
+                        id="check_out_date"
+                        data-testid="check-out-date" 
+                    />
+                </div>
+            </div>
+            
+            <div class="form-control mt-4">
+                <label class="label">
+                    <span class="label-text">Room Selection</span>
+                </label>
+                <select 
+                    x-model="bookingForm.room_num" 
+                    class="select select-bordered" 
+                    required
+                    id="room_num"
+                    data-testid="room-select"
+                >
+                    <option value="" disabled selected>Select a room</option>
+                    <template x-for="room in availableRooms" :key="room.room_num">
+                        <option 
+                            :value="room.room_num" 
+                            x-text="'Room ' + room.room_num + ' - ' + room.room_type.name + ' - $' + room.room_type.price_per_night + '/night'"
+                            :data-testid="'room-option-' + room.room_num"
+                        ></option>
+                    </template>
+                </select>
+                <label class="label" x-show="bookingForm.check_in_date && bookingForm.check_out_date && availableRooms.length === 0">
+                    <span class="label-text-alt text-error" data-testid="no-rooms-message">No rooms available for selected dates</span>
+                </label>
+            </div>
+            
+            <!-- Room Preview -->
+            <div class="mt-6" x-show="getSelectedRoom()" id="room-preview">
+                <div class="divider">Room Preview</div>
+                <div class="bg-base-200 p-4 rounded-lg">
+                    <div class="flex flex-col md:flex-row gap-4">
+                        <div class="md:w-1/3">
+                            <img :src="getRoomImage(getSelectedRoom()?.room_type.name)" alt="Room Image" class="w-full h-32 object-cover rounded-lg" />
+                        </div>
+                        <div class="md:w-2/3">
+                            <h3 class="font-bold">
+                                Room <span x-text="getSelectedRoom()?.room_num" id="preview-room-num"></span> - 
+                                <span x-text="getSelectedRoom()?.room_type.name" id="preview-room-type"></span>
+                            </h3>
+                            <p class="text-sm mt-1" x-text="getSelectedRoom()?.room_type.description" id="preview-room-description"></p>
+                            <div class="flex flex-wrap gap-1 mt-2" id="preview-facilities">
+                                <template x-if="getSelectedRoom()?.room_type.room_facilities">
+                                    <template x-for="facility in getSelectedRoom().room_type.room_facilities" :key="facility.fac_id">
+                                        <div class="badge badge-sm" x-text="getFacilityName(facility.fac_id)"></div>
+                                    </template>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Booking summary -->
+                    <div class="mt-4 p-3 bg-base-100 rounded-lg" id="booking-summary">
+                        <h4 class="font-semibold">Booking Summary</h4>
+                        <div class="grid grid-cols-2 gap-2 mt-2">
+                            <div>Check-in:</div>
+                            <div x-text="formatDate(bookingForm.check_in_date)" id="summary-checkin"></div>
+                            
+                            <div>Check-out:</div>
+                            <div x-text="formatDate(bookingForm.check_out_date)" id="summary-checkout"></div>
+                            
+                            <div>Length of stay:</div>
+                            <div x-text="calculateNights() + ' night(s)'" id="summary-nights"></div>
+                            
+                            <div>Price per night:</div>
+                            <div x-text="'$' + getSelectedRoom()?.room_type.price_per_night" id="summary-price-per-night"></div>
+                            
+                            <div class="font-bold">Total:</div>
+                            <div class="font-bold" x-text="'$' + calculateTotalPrice()" id="summary-total-price"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-control mt-6">
+                <button 
+                    type="submit" 
+                    class="btn btn-primary" 
+                    :disabled="!isBookingFormValid()"
+                    id="book-now-button"
+                    data-testid="book-now-button"
+                >
+                    Book Now
+                </button>
+            </div>
+            
+            <!-- Status indicator for concurrent testing -->
+            <div class="mt-4 p-3 bg-base-200 rounded-lg" id="request-status" style="display: none;">
+                <h4 class="font-semibold">Request Status</h4>
+                <div class="flex items-center mt-2">
+                    <div class="loading loading-spinner loading-sm mr-2" id="loading-spinner"></div>
+                    <span id="status-message">Processing request...</span>
+                </div>
+                <div class="mt-2">
+                    <span class="font-semibold">Request ID: </span>
+                    <span id="request-id"></span>
+                </div>
+                <div class="mt-2">
+                    <span class="font-semibold">Response Time: </span>
+                    <span id="response-time">-</span> ms
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Booking Confirmation Modal -->
+<dialog id="bookingConfirmModal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg">Booking Confirmed!</h3>
+        <div x-show="confirmedBooking" id="confirmed-booking-details">
+            <p class="py-4">Your booking has been confirmed. Please keep your booking ID for reference.</p>
+            
+            <div class="bg-base-200 p-4 rounded-lg mt-2">
+                <div class="flex justify-between items-center">
+                    <span class="font-semibold">Booking ID:</span>
+                    <span class="font-bold" x-text="confirmedBooking.booking_id" id="confirm-booking-id" data-testid="confirmed-booking-id"></span>
+                </div>
+                <div class="flex justify-between items-center mt-2">
+                    <span class="font-semibold">Room:</span>
+                    <span x-text="'Room ' + confirmedBooking.room_num" id="confirm-room-num"></span>
+                </div>
+                <div class="flex justify-between items-center mt-2">
+                    <span class="font-semibold">Check-in:</span>
+                    <span x-text="formatDate(confirmedBooking.check_in_date)" id="confirm-checkin"></span>
+                </div>
+                <div class="flex justify-between items-center mt-2">
+                    <span class="font-semibold">Check-out:</span>
+                    <span x-text="formatDate(confirmedBooking.check_out_date)" id="confirm-checkout"></span>
+                </div>
+                <div class="flex justify-between items-center mt-2">
+                    <span class="font-semibold">Total Price:</span>
+                    <span class="font-bold" x-text="'$' + confirmedBooking.total_price" id="confirm-total-price"></span>
+                </div>
+                <div class="flex justify-between items-center mt-2">
+                    <span class="font-semibold">Transaction Status:</span>
+                    <span class="font-bold text-success" id="transaction-status">SUCCESS</span>
+                </div>
+            </div>
+            
+            <p class="mt-4">You'll need to complete the payment to confirm your reservation.</p>
+        </div>
+        <div class="modal-action">
+            <button class="btn btn-primary" @click="goToPayment()" id="proceed-to-payment" data-testid="proceed-to-payment">Proceed to Payment</button>
+            <form method="dialog">
+                <button class="btn" id="close-modal">Close</button>
+            </form>
+        </div>
+    </div>
+</dialog>
+
+<!-- Error Modal -->
+<dialog id="errorModal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg text-error">Booking Error</h3>
+        <p class="py-4" id="error-message">There was an error processing your booking request.</p>
+        <div class="bg-base-200 p-4 rounded-lg mt-2">
+            <div class="flex justify-between items-center">
+                <span class="font-semibold">Error Type:</span>
+                <span id="error-type">Transaction Error</span>
+            </div>
+            <div class="flex justify-between items-center mt-2">
+                <span class="font-semibold">Error Code:</span>
+                <span id="error-code">-</span>
+            </div>
+        </div>
+        <div class="modal-action">
+            <form method="dialog">
+                <button class="btn" id="close-error-modal">Close</button>
+            </form>
+        </div>
+    </div>
+</dialog>
+
+<!-- Add JavaScript to enhance the form for concurrent testing -->
+<script>
+    document.addEventListener('alpine:init', () => {
+        // Add request ID generator
+        Alpine.data('concurrentTestingHelpers', () => ({
+            generateRequestId() {
+                return 'req-' + Math.random().toString(36).substring(2, 11);
+            },
+            
+            // Enhanced booking submission with concurrent testing support
+            enhancedCreateBooking() {
+                const requestId = this.generateRequestId();
+                const startTime = performance.now();
+                
+                // Show status indicator
+                document.getElementById('request-status').style.display = 'block';
+                document.getElementById('request-id').textContent = requestId;
+                document.getElementById('status-message').textContent = 'Processing request...';
+                document.getElementById('loading-spinner').style.display = 'inline-block';
+                
+                // Add request ID to booking data for tracing
+                const enhancedBookingData = {
+                    ...this.bookingForm,
+                    request_id: requestId
+                };
+                
+                // Add custom headers for test identification
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'X-Request-ID': requestId,
+                    'X-Concurrent-Test': 'true'
+                };
+                
+                // Make the booking request
+                fetch('/api/v1/bookings', {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(enhancedBookingData)
+                })
+                .then(response => {
+                    const endTime = performance.now();
+                    document.getElementById('response-time').textContent = Math.round(endTime - startTime);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    document.getElementById('status-message').textContent = 'Request successful';
+                    document.getElementById('loading-spinner').style.display = 'none';
+                    
+                    // Set the confirmed booking data
+                    this.confirmedBooking = data;
+                    
+                    // Add transaction ID for tracing
+                    if (data.transaction_id) {
+                        document.getElementById('transaction-status').setAttribute('data-tx-id', data.transaction_id);
+                    }
+                    
+                    // Show the confirmation modal
+                    document.getElementById('bookingConfirmModal').showModal();
+                })
+                .catch(error => {
+                    document.getElementById('status-message').textContent = 'Request failed';
+                    document.getElementById('loading-spinner').style.display = 'none';
+                    
+                    // Set error details
+                    document.getElementById('error-message').textContent = error.message || 'There was an error processing your booking request.';
+                    document.getElementById('error-type').textContent = 'API Error';
+                    document.getElementById('error-code').textContent = error.status || 'UNKNOWN';
+                    
+                    // Show error modal
+                    document.getElementById('errorModal').showModal();
+                    
+                    console.error('Booking error:', error);
+                });
+            }
+        }));
+    });
+</script>
+{{end}}

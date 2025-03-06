@@ -1,0 +1,112 @@
+{{ define "rooms-content.html" }}
+<h2 class="text-3xl font-bold mb-6 text-center">Our Rooms</h2>
+
+<!-- Date Range Filter -->
+<div class="flex justify-center gap-4 mb-6">
+  <label class="flex items-center gap-2">
+    Check-in: <input type="date" x-model="checkInDate" class="input input-bordered" />
+  </label>
+  <label class="flex items-center gap-2">
+    Check-out: <input type="date" x-model="checkOutDate" class="input input-bordered" />
+  </label>
+  <button class="btn btn-primary" @click="fetchAvailableRooms">Search</button>
+</div>
+
+<!-- Room Type Filter -->
+<div class="flex flex-wrap justify-center mb-6 gap-2">
+  <button class="btn btn-sm" :class="selectedRoomType === null ? 'btn-primary' : 'btn-outline'" @click="selectedRoomType = null">All Types</button>
+  <template x-for="type in roomTypes" :key="type.type_id">
+    <button class="btn btn-sm" :class="selectedRoomType === type.type_id ? 'btn-primary' : 'btn-outline'" @click="selectedRoomType = type.type_id">
+      <span x-text="type.name"></span>
+    </button>
+  </template>
+</div>
+
+<!-- Room Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+  <template x-for="room in filteredRooms" :key="room.room_num">
+    <div class="card bg-base-100 shadow-xl">
+      <figure>
+        <img :src="getRoomImage(room.room_type.name)" alt="Room Image" class="h-48 w-full object-cover" />
+      </figure>
+      <div class="card-body">
+        <h2 class="card-title">
+          Room <span x-text="room.room_num"></span>
+          <div class="badge badge-secondary" x-text="room.room_type.name"></div>
+        </h2>
+        <p x-text="room.room_type.description"></p>
+
+        <div class="flex flex-wrap gap-1 my-2">
+          <template x-if="room.room_type.room_facilities">
+            <template x-for="facility in room.room_type.room_facilities" :key="facility.fac_id">
+              <div class="badge badge-outline" x-text="getFacilityName(facility.fac_id)"></div>
+            </template>
+          </template>
+        </div>
+
+        <div class="flex justify-between items-center mt-2">
+          <div>
+            <p class="text-sm">Area: <span x-text="room.room_type.area"></span> m²</p>
+            <p class="text-sm">Max Guests: <span x-text="room.room_type.noOfGuest"></span></p>
+          </div>
+          <div class="text-right">
+            <p class="font-bold text-lg text-primary">$<span x-text="room.room_type.price_per_night"></span> / night</p>
+          </div>
+        </div>
+
+        <div class="card-actions justify-end mt-4">
+          <button class="btn btn-primary" @click="selectRoomForBooking(room)">Book Now</button>
+          <button class="btn btn-outline btn-primary" @click="viewRoomDetails(room)">Details</button>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+
+<!-- Room Details Modal -->
+<dialog id="roomDetailsModal" class="modal">
+  <div class="modal-box max-w-3xl" x-show="selectedRoom !== null">
+    <h3 class="font-bold text-lg">
+      Room <span x-text="selectedRoom?.room_num"></span> -
+      <span x-text="selectedRoom?.room_type.name"></span>
+    </h3>
+    <div class="flex flex-col md:flex-row gap-6 mt-4">
+      <div class="md:w-1/2">
+        <img :src="getRoomImage(selectedRoom?.room_type.name)" alt="Room Image" class="w-full h-64 object-cover rounded-lg" />
+      </div>
+      <div class="md:w-1/2">
+        <p class="mb-2" x-text="selectedRoom?.room_type.description"></p>
+        <div class="divider"></div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <p class="font-semibold">Area:</p>
+            <p x-text="selectedRoom?.room_type.area + ' m²'"></p>
+          </div>
+          <div>
+            <p class="font-semibold">Max Guests:</p>
+            <p x-text="selectedRoom?.room_type.noOfGuest"></p>
+          </div>
+          <div>
+            <p class="font-semibold">Price per Night:</p>
+            <p class="text-primary font-bold" x-text="'$' + selectedRoom?.room_type.price_per_night"></p>
+          </div>
+        </div>
+        <div class="divider">Facilities</div>
+        <div class="flex flex-wrap gap-2">
+          <template x-if="selectedRoom?.room_type.room_facilities">
+            <template x-for="facility in selectedRoom.room_type.room_facilities" :key="facility.fac_id">
+              <div class="badge badge-lg" x-text="getFacilityName(facility.fac_id)"></div>
+            </template>
+          </template>
+        </div>
+      </div>
+    </div>
+    <div class="modal-action">
+      <button class="btn btn-primary" @click="selectRoomForBooking(selectedRoom)">Book Now</button>
+      <form method="dialog">
+        <button class="btn">Close</button>
+      </form>
+    </div>
+  </div>
+</dialog>
+{{ end }}

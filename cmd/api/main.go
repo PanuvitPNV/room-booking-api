@@ -46,19 +46,29 @@ func main() {
 	// Load configuration
 	cfg := config.ConfigGetting()
 
+	// Initialize logger
+	logger, err := utils.NewLogger("./logs")
+	if err != nil {
+		log.Fatalf("Failed to initialize logger: %v", err)
+	}
+	defer logger.Close()
+
+	logger.Info("Starting hotel booking system")
+
 	// Initialize database
-	log.Println("Connecting to database...")
+	logger.Info("Connecting to database...")
 	db := databases.NewPostgresDatabase(cfg.Database).Connect()
 
 	// AutoMigrate database schema
-	log.Println("Running database migrations...")
+	logger.Info("Running database migrations...")
 	if err := migrateDatabase(db); err != nil {
-		log.Fatalf("Failed to migrate database: %v", err)
+		logger.Fatalf("Failed to migrate database: %v", err)
 	}
 
 	// Seed database with initial data
+	logger.Info("Seeding database with initial data...")
 	if err := data.SeedDatabase(db); err != nil {
-		log.Fatalf("Failed to seed database: %v", err)
+		logger.Fatalf("Failed to seed database: %v", err)
 	}
 
 	// Initialize DB reference
@@ -66,6 +76,7 @@ func main() {
 
 	// Create lock manager for concurrency control
 	lockManager := utils.NewLockManager(10 * time.Second)
+	logger.Info("Initialized lock manager for concurrency control")
 
 	// Create repositories
 	bookingRepo := repositories.NewBookingRepository(db)
@@ -85,14 +96,21 @@ func main() {
 	// Create Echo instance
 	e := echo.New()
 
+	// Set custom logger
+	e.Logger = logger
+
 	// Setup middleware
 	middleware.SetupMiddleware(e, cfg)
+
+	// Add logger middleware
+	e.Use(middleware.RequestLoggerMiddleware(logger))
+	e.Use(middleware.TransactionLoggerMiddleware(logger))
 
 	// Setup routes
 	routes.SetupRoutes(e, bookingHandler, receiptHandler, roomHandler)
 
 	// Start server with graceful shutdown
-	startServer(e, cfg)
+	startServer(e, cfg, logger)
 }
 
 // migrateDatabase runs database migrations
@@ -110,19 +128,23 @@ func migrateDatabase(db *gorm.DB) error {
 }
 
 // startServer starts the HTTP server with graceful shutdown
-func startServer(e *echo.Echo, cfg *config.Config) {
+func startServer(e *echo.Echo, cfg *config.Config, logger *utils.Logger) {
 	// Start server in a goroutine
 	go func() {
 		address := fmt.Sprintf(":%d", cfg.Server.Port)
+		logger.Infof("Server starting on %s", address)
+
 		if err := e.Start(address); err != nil && err != http.ErrServerClosed {
-			e.Logger.Fatalf("Failed to start server: %v", err)
+			logger.Fatalf("Failed to start server: %v", err)
 		}
 	}()
 
-	// Wait for interrupt signal to gracefully shutdown the server
+	// Wait for interrupt signal to gracefully shut down the server
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt)
 	<-quit
+
+	logger.Info("Shutting down server...")
 
 	// Create a deadline for graceful shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -130,6 +152,8 @@ func startServer(e *echo.Echo, cfg *config.Config) {
 
 	// Attempt graceful shutdown
 	if err := e.Shutdown(ctx); err != nil {
-		e.Logger.Fatal(err)
+		logger.Fatalf("Server shutdown failed: %v", err)
 	}
+
+	logger.Info("Server gracefully stopped")
 }

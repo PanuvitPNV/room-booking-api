@@ -1,0 +1,215 @@
+{{define "manage-booking-content.html"}}
+<h2 class="text-3xl font-bold mb-6 text-center">Manage Your Booking</h2>
+
+<div class="card bg-base-100 shadow-xl max-w-3xl mx-auto">
+    <div class="card-body">
+        <!-- Booking Lookup Form -->
+        <div x-show="!currentBooking">
+            <form @submit.prevent="lookupBooking">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Booking ID</span>
+                    </label>
+                    <input type="number" x-model="lookupForm.booking_id" placeholder="Enter your booking ID" class="input input-bordered" required />
+                </div>
+                
+                <div class="form-control mt-6">
+                    <button type="submit" class="btn btn-primary">
+                        Find Booking
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Booking Details -->
+        <div x-show="currentBooking">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xl font-bold">Booking Details</h3>
+                <button class="btn btn-sm btn-ghost" @click="currentBooking = null">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <p class="font-semibold">Booking ID:</p>
+                    <p x-text="currentBooking.booking_id"></p>
+                </div>
+                <div>
+                    <p class="font-semibold">Guest Name:</p>
+                    <p x-text="currentBooking.booking_name"></p>
+                </div>
+                <div>
+                    <p class="font-semibold">Room Number:</p>
+                    <p x-text="currentBooking.room_num"></p>
+                </div>
+                <div>
+                    <p class="font-semibold">Room Type:</p>
+                    <p x-text="currentBooking.room?.room_type?.name"></p>
+                </div>
+                <div>
+                    <p class="font-semibold">Check-in Date:</p>
+                    <p x-text="formatDate(currentBooking.check_in_date)"></p>
+                </div>
+                <div>
+                    <p class="font-semibold">Check-out Date:</p>
+                    <p x-text="formatDate(currentBooking.check_out_date)"></p>
+                </div>
+                <div>
+                    <p class="font-semibold">Booking Date:</p>
+                    <p x-text="formatDateTime(currentBooking.booking_date)"></p>
+                </div>
+                <div>
+                    <p class="font-semibold">Total Price:</p>
+                    <p class="font-bold text-primary" x-text="'$' + currentBooking.total_price"></p>
+                </div>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <!-- Payment Status -->
+            <div class="bg-base-200 p-4 rounded-lg">
+                <h4 class="font-semibold mb-2">Payment Status</h4>
+                
+                <div x-show="currentReceipt">
+                    <div class="badge badge-success mb-2">Paid</div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <div>
+                            <p class="font-semibold">Receipt ID:</p>
+                            <p x-text="currentReceipt.receipt_id"></p>
+                        </div>
+                        <div>
+                            <p class="font-semibold">Payment Date:</p>
+                            <p x-text="formatDateTime(currentReceipt.payment_date)"></p>
+                        </div>
+                        <div>
+                            <p class="font-semibold">Payment Method:</p>
+                            <p x-text="currentReceipt.payment_method"></p>
+                        </div>
+                        <div>
+                            <p class="font-semibold">Amount Paid:</p>
+                            <p x-text="'$' + currentReceipt.amount"></p>
+                        </div>
+                    </div>
+                    
+                    <!-- Refund Button -->
+                    <div class="mt-4">
+                        <button class="btn btn-error btn-sm" @click="confirmRefund()">
+                            Request Refund
+                        </button>
+                    </div>
+                </div>
+                
+                <div x-show="!currentReceipt">
+                    <div class="badge badge-warning mb-2">Unpaid</div>
+                    <p>Payment is required to confirm your booking.</p>
+                    
+                    <!-- Payment Form -->
+                    <div class="mt-4">
+                        <form @submit.prevent="processPayment">
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text">Payment Method</span>
+                                </label>
+                                <select x-model="paymentForm.payment_method" class="select select-bordered" required>
+                                    <option value="" disabled selected>Select payment method</option>
+                                    <option value="Credit">Credit Card</option>
+                                    <option value="Debit">Debit Card</option>
+                                    <option value="Bank Transfer">Bank Transfer</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-control mt-4">
+                                <label class="label">
+                                    <span class="label-text">Amount</span>
+                                </label>
+                                <input type="number" x-model="paymentForm.amount" class="input input-bordered" :value="currentBooking.total_price" readonly />
+                            </div>
+                            
+                            <div class="form-control mt-4">
+                                <button type="submit" class="btn btn-primary">
+                                    Process Payment
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <!-- Actions -->
+            <!-- <div class="flex flex-wrap gap-2 justify-between">
+                <div>
+                    <button class="btn btn-outline btn-error" @click="confirmCancelBooking()">
+                        Cancel Booking
+                    </button>
+                </div>
+                
+                <div>
+                    <button class="btn btn-outline btn-primary" @click="modifyBooking()">
+                        Modify Dates
+                    </button>
+                </div>
+            </div> -->
+        </div>
+    </div>
+</div>
+
+<!-- Cancel Confirmation Modal -->
+<dialog id="cancelConfirmModal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg">Cancel Booking</h3>
+        <p class="py-4">Are you sure you want to cancel your booking? This action cannot be undone.</p>
+        <div class="modal-action">
+            <button class="btn btn-error" @click="cancelBooking()">Yes, Cancel Booking</button>
+            <form method="dialog">
+                <button class="btn">No, Keep Booking</button>
+            </form>
+        </div>
+    </div>
+</dialog>
+
+<!-- Refund Confirmation Modal -->
+<dialog id="refundConfirmModal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg">Request Refund</h3>
+        <p class="py-4">Are you sure you want to request a refund for this booking? This will also cancel your booking.</p>
+        <div class="modal-action">
+            <button class="btn btn-error" @click="processRefund()">Yes, Request Refund</button>
+            <form method="dialog">
+                <button class="btn">No, Keep Booking</button>
+            </form>
+        </div>
+    </div>
+</dialog>
+
+<!-- Modify Booking Modal -->
+<dialog id="modifyBookingModal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg">Modify Booking Dates</h3>
+        <form @submit.prevent="updateBookingDates" class="py-4">
+            <div class="form-control">
+                <label class="label">
+                    <span class="label-text">New Check-in Date</span>
+                </label>
+                <input type="date" x-model="modifyForm.check_in_date" class="input input-bordered" required :min="getTodayDate()" />
+            </div>
+            
+            <div class="form-control mt-4">
+                <label class="label">
+                    <span class="label-text">New Check-out Date</span>
+                </label>
+                <input type="date" x-model="modifyForm.check_out_date" class="input input-bordered" required :min="getMinModifyCheckoutDate()" />
+            </div>
+            
+            <div class="modal-action">
+                <button type="submit" class="btn btn-primary">Update Dates</button>
+                <button type="button" class="btn" onclick="modifyBookingModal.close()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+{{end}}

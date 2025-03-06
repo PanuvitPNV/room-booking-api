@@ -1,0 +1,35 @@
+Hotel Booking System - Transaction Test Summary
+==============================================
+Date: Thu Mar  6 04:44:00 +07 2025
+
+Transaction Statistics:
+----------------------
+Transactions started: 0
+Transactions completed: 0
+Successful transactions: 0
+Failed transactions: 0
+
+Booking operations:
+------------------
+Booking attempts: 0
+Successful bookings: 0
+Failed bookings: 0
+
+Payment operations:
+------------------
+Payment attempts: 0
+Successful payments: 0
+Failed payments: 0
+
+Concurrency Management:
+----------------------
+Lock acquisitions: 0
+Lock releases: 0
+Conflicts detected: 0
+Booking conflicts: 0
+
+See HTML report at: ./tests/artillery/reports/tx-report.html
+See logs for detailed transaction analysis at: ./logs/hotel_booking_2025-03-06.log
+
+TRANSACTION MANAGEMENT EVIDENCE
+===============================

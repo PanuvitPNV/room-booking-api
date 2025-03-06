@@ -1,12 +1,28 @@
 package routes
 
 import (
-	"github.com/labstack/echo/v4"
+	"fmt"
+	"html/template"
+	"io"
+	"log"
+	"net/http"
 
+	"github.com/labstack/echo/v4"
 	"github.com/panuvitpnv/room-booking-api/internal/api/handlers"
 	"github.com/panuvitpnv/room-booking-api/internal/api/middleware"
 	echoSwagger "github.com/swaggo/echo-swagger"
 )
+
+// TemplateRenderer is a custom HTML template renderer for Echo
+type TemplateRenderer struct {
+	templates *template.Template
+}
+
+// Render renders a template document
+func (t *TemplateRenderer) Render(w io.Writer, name string, data interface{}, c echo.Context) error {
+	// Add global template functions if needed
+	return t.templates.ExecuteTemplate(w, name, data)
+}
 
 // SetupRoutes configures all application routes
 func SetupRoutes(
@@ -15,18 +31,46 @@ func SetupRoutes(
 	receiptHandler *handlers.ReceiptHandler,
 	roomHandler *handlers.RoomHandler,
 ) {
+	// Create the templates directory structure if it doesn't exist
+	// You can add code here to ensure directories exist
+
+	// Initialize the template renderer
+	templateFiles := "./web/templates/*.html"
+	templates, err := template.ParseGlob(templateFiles)
+	if err != nil {
+		log.Printf("Error parsing templates: %v", err)
+		panic(fmt.Sprintf("Failed to parse templates: %v", err))
+	}
+
+	e.Renderer = &TemplateRenderer{
+		templates: templates,
+	}
+
+	// Serve static files for assets
+	e.Static("/static", "./web/static")
+
+	// Home route for the booking system
+	e.GET("/", func(c echo.Context) error {
+		err := c.Render(http.StatusOK, "index.html", map[string]interface{}{
+			"Title": "Hotel Booking System",
+		})
+
+		if err != nil {
+			log.Printf("Error rendering template: %v", err)
+			return c.String(http.StatusInternalServerError, fmt.Sprintf("Error rendering template: %v", err))
+		}
+
+		return nil
+	})
+
+	// Swagger documentation route
+	e.GET("/swagger/*", echoSwagger.WrapHandler)
+
 	// Create a versioned API group
 	api := e.Group("/api/v1")
 
 	// Add transaction tracking middleware to specific routes
 	txMiddleware := middleware.TransactionTracker()
-
-	// Monitoring/health check routes
-	e.GET("/health", func(c echo.Context) error {
-		return c.JSON(200, map[string]string{
-			"status": "UP",
-		})
-	})
 
 	// Booking routes
 	bookings := api.Group("/bookings")
@@ -47,7 +91,7 @@ func SetupRoutes(
 		rooms.GET("/types", roomHandler.GetRoomTypes)
 		rooms.GET("/type/:typeId", roomHandler.GetRoomsByType)
 		rooms.POST("/availability", roomHandler.GetRoomAvailabilitySummary)
-		rooms.POST("/available", bookingHandler.GetAvailableRooms) // For booking availability
+		rooms.POST("/available", bookingHandler.GetAvailableRooms)
 	}
 
 	// Receipt routes
@@ -60,7 +104,4 @@ func SetupRoutes(
 		receipts.POST("/refund", receiptHandler.ProcessRefund, txMiddleware)
 		receipts.POST("/by-date", receiptHandler.GetReceiptsByDateRange)
 	}
-
-	// Add docs route if we implement Swagger later
-	e.GET("/swagger/*", echoSwagger.WrapHandler)
 }
