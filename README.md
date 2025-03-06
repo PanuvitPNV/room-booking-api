@@ -1,66 +1,114 @@
 # Hotel Booking System
 
-This is a Go application that demonstrates transaction management and concurrency control in a hotel room booking system. The application uses the Echo framework for the API and GORM for database operations.
+A Go-based hotel booking system that demonstrates transaction management and concurrency control using the Echo framework. This application showcases robust handling of concurrent booking operations with various locking strategies and transaction management techniques.
 
 ## Features
 
 - Room management (types, facilities, and availability)
 - Booking management (create, update, cancel)
 - Payment processing (receipts, refunds)
-- Robust transaction management
-- Concurrency control with application-level locking and database-level locking
-- Optimistic and pessimistic concurrency strategies
+- Transaction management with ACID compliance
+- Concurrency control with both optimistic and pessimistic locking strategies
+- Application-level and database-level locking mechanisms
+- Deadlock prevention and handling
+- Concurrent transaction testing suite
+- Transaction timeline visualization for test analysis
 
 ## Project Structure
 
 ```
 hotel-booking-system/
 ├── cmd/
-│   └── api/
-│       └── main.go                  # Application entry point
-├── config/
-│   └── config.go                    # Application configuration
+│   ├── api/
+│   │   └── main.go                  # API server entry point
+│   └── txtests/
+│       └── main.go                  # Concurrency testing tool
+├── docs/
+│   ├── docs.go                      # Swagger documentation
+│   ├── swagger.go
+│   ├── swagger.json
+│   └── swagger.yaml
 ├── internal/
 │   ├── api/
 │   │   ├── handlers/                # HTTP request handlers
+│   │   │   ├── booking_handler.go
+│   │   │   ├── receipt_handler.go
+│   │   │   └── room_handler.go
 │   │   ├── middleware/              # HTTP middleware
+│   │   │   ├── logger_middleware.go
+│   │   │   └── middleware.go
 │   │   └── routes/                  # API route definitions
-│   ├── data/
-│   │   └── seeds.go                 # Database seeding
+│   │       └── routes.go
+│   ├── config/                      # Application configuration
+│   │   ├── config.go
+│   │   └── config.yaml
+│   ├── data/                        # Database seeding
+│   │   └── seeds.go
+│   ├── databases/                   # Database connections
+│   │   ├── database.go
+│   │   └── postgresDatabase.go
+│   ├── models/                      # Data models
+│   │   └── models.go
 │   ├── repositories/                # Database access layer
+│   │   ├── booking_repository.go
+│   │   ├── receipt_repository.go
+│   │   └── room_repository.go
 │   ├── services/                    # Business logic layer
-│   └── utils/
+│   │   ├── booking_service.go
+│   │   ├── receipt_service.go
+│   │   └── room_service.go
+│   └── utils/                       # Utility functions
 │       ├── database.go              # Database utilities
-│       └── lock_manager.go          # Concurrency control
-├── models/
-│   └── models.go                    # Data models
-├── go.mod
+│       ├── lock_manager.go          # Concurrency control
+│       ├── logger.go                # Logging utilities
+│       ├── transaction_id.go        # Transaction tracking
+│       └── tx_logger.go             # Transaction logging
+├── logs/                            # Application logs
+├── pkg/                             # Reusable packages
+│   └── report/                      # Test reporting tools
+│       ├── template_funcs.go        # Template helper functions
+│       └── timeline.go              # Timeline visualization generator
+├── test-results/                    # Output from concurrency tests
+├── web/                             # Web assets and templates
+│   ├── static/                      # Static files (CSS, JS, images)
+│   │   ├── css/
+│   │   ├── img/
+│   │   └── js/
+│   └── templates/                   # HTML templates
+│       ├── reports/                 # Report templates
+│       │   └── timeline.html        # Transaction timeline visualization
+│       └── ... (other templates)
+├── go.mod                           # Go module definition
 └── README.md
 ```
 
 ## Technology Stack
 
-- Go language
-- Echo web framework
-- GORM ORM library
-- PostgreSQL database
+- **Backend**: Go language with Echo framework
+- **Database**: PostgreSQL with GORM ORM
+- **Documentation**: Swagger
+- **Testing**: Custom concurrency testing framework
+- **Visualization**: Transaction timeline visualization with vis.js
 
 ## Transaction Management Features
 
-1. **Database Transactions**:
-   - ACID compliance for critical operations
-   - Automatic rollback on errors
-   - Transaction retry with exponential backoff
+### Database Transactions
+- ACID compliance for all critical operations
+- Automatic rollback on errors
+- Transaction retry with exponential backoff for transient failures
+- Transaction propagation across service layers
 
-2. **Concurrency Control**:
-   - Optimistic locking for non-critical operations
-   - Pessimistic locking for critical operations
-   - Application-level locking via LockManager
+### Concurrency Control
+- **Optimistic Locking**: Using version fields for non-critical operations
+- **Pessimistic Locking**: Using row locks and advisory locks for critical operations
+- **Application-Level Locking**: Custom LockManager implementation
+- **Two-Phase Locking**: For complex operations involving multiple resources
 
-3. **Deadlock Prevention**:
-   - Consistent lock acquisition order
-   - Lock timeouts
-   - Lock acquisition retries
+### Deadlock Prevention
+- Consistent lock acquisition order
+- Lock timeouts to prevent indefinite waiting
+- Lock acquisition retries with backoff
+- Deadlock detection and resolution
 
 ## API Endpoints
 
@@ -90,22 +138,69 @@ hotel-booking-system/
 
 ## How to Run
 
-1. Set up PostgreSQL database
-2. Configure connection in `config.yaml`
-3. Run the application:
+### Prerequisites
+- Go 1.22 or higher
+- PostgreSQL database
 
-```bash
-go run cmd/api/main.go
-```
+### Setup and Installation
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/PanuvitPNV/room-booking-api
+   cd room-booking-api
+   ```
+
+2. Install dependencies:
+   ```bash
+   go mod download
+   ```
+
+3. Configure the PostgreSQL database connection in `internal/config/config.yaml`
+
+4. Run database migrations and seed data:
+   ```bash
+   go run cmd/api/main.go --migrate --seed
+   ```
+
+5. Start the API server:
+   ```bash
+   go run cmd/api/main.go
+   ```
+
+6. The API will be available at http://localhost:8080
 
 ## Concurrency Testing
 
-To test concurrency control, you can use a tool like Apache Bench or hey:
+The system includes a comprehensive concurrency testing tool that simulates multiple clients interacting with the booking system simultaneously.
 
+### Running the Test Suite
 ```bash
-# Install hey
-go install github.com/rakyll/hey@latest
-
-# Test concurrent booking attempts
-hey -n 100 -c 10 -m POST -H "Content-Type: application/json" -d '{"booking_name":"Test","room_num":101,"check_in_date":"2023-04-01T00:00:00Z","check_out_date":"2023-04-03T00:00:00Z"}' http://localhost:8080/api/v1/bookings
+go run cmd/txtests/main.go [baseURL] [scenario]
 ```
+
+Available scenarios:
+- `peak_booking_rush` - Simulates many clients booking during peak periods
+- `weekend_availability_race` - Tests race conditions for weekend availability
+- `payment_processing_surge` - Tests concurrent payment processing
+- `cancellation_and_rebooking` - Tests cancellation and immediate rebooking
+- `booking_modification_conflicts` - Tests concurrent modifications
+- `mixed_clients` - Runs clients with different behavior patterns
+- `all` - Runs all scenarios in sequence
+
+### Test Visualization
+
+After running the tests, a transaction timeline visualization is generated in the `test-results` directory. This HTML report provides an interactive timeline of all operations, showing:
+
+- Timeline of all transactions with color-coding by type and status
+- Concurrent operations and conflicts
+- Details of individual transactions including timing and results
+- Room-specific analysis showing contention patterns
+- Client behavior analysis
+
+To view the visualization:
+1. Open the generated HTML file in `test-results/timeline_*.html`
+2. Use the interactive filters to analyze different aspects of the test run
+3. Click on events to see detailed information
+
+## License
+
+This project is licensed under the [MIT License](LICENSE) - see the [LICENSE](LICENSE) file for details.

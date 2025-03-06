@@ -38,3 +38,5 @@ tmp/
 
 # node
 node_modules/
+logs/
+test-results/
