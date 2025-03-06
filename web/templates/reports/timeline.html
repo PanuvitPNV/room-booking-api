@@ -1,0 +1,695 @@
+<!-- web/templates/reports/timeline.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.TestName}} - Transaction Timeline</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vis-timeline@7.7.0/dist/vis-timeline-graph2d.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        .timeline-container {
+            height: 600px;
+            margin-bottom: 30px;
+            border: 1px solid #ddd;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .timeline-legend {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-right: 15px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            border: 1px solid #ccc;
+        }
+        .stats-card {
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .rooms-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .room-card {
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+        }
+        .filters {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .event-details {
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .status-success { background-color: #4CAF50; }
+        .status-failed { background-color: #F44336; }
+        .status-conflict { background-color: #FF9800; }
+        
+        .action-create_booking { background-color: #2196F3; }
+        .action-get_available_rooms { background-color: #9C27B0; }
+        .action-update_booking { background-color: #00BCD4; }
+        .action-cancel_booking { background-color: #FF5722; }
+        .action-process_payment { background-color: #8BC34A; }
+        .action-process_refund { background-color: #CDDC39; }
+        .action-get_booking { background-color: #3F51B5; }
+        
+        .timeline-tooltip {
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            font-size: 12px;
+            max-width: 300px;
+        }
+        .visualization-tabs {
+            margin-bottom: 20px;
+        }
+        .tab-content {
+            padding: 20px;
+            background-color: white;
+            border: 1px solid #dee2e6;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+        }
+    </style>
+</head>
+<body>
+    <script id="events-data" type="application/json">
+        {{.Events | json}}
+    </script>
+    <div class="container-fluid">
+        <div class="header">
+            <h1>Hotel Booking System - Transaction Timeline</h1>
+            <h3>{{.TestName}}</h3>
+            <p>
+                <strong>Duration:</strong> {{.TestDuration}} | 
+                <strong>Start:</strong> {{.TestStartTime.Format "2006-01-02 15:04:05"}} | 
+                <strong>End:</strong> {{.TestEndTime.Format "2006-01-02 15:04:05"}}
+            </p>
+        </div>
+
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card stats-card">
+                    <div class="card-header">
+                        <h5>Test Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Total Requests:</strong> {{.TotalRequests}}</p>
+                        <p><strong>Successful:</strong> {{.SuccessfulRequest}} ({{percentage .SuccessfulRequest .TotalRequests}}%)</p>
+                        <p><strong>Failed:</strong> {{.FailedRequests}} ({{percentage .FailedRequests .TotalRequests}}%)</p>
+                        <p><strong>Conflicts:</strong> {{.ConflictEvents}} ({{percentage .ConflictEvents .TotalRequests}}%)</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-8">
+                <div class="card stats-card">
+                    <div class="card-header">
+                        <h5>Action Statistics</h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Action Type</th>
+                                    <th>Total</th>
+                                    <th>Success</th>
+                                    <th>Failed</th>
+                                    <th>Success Rate</th>
+                                    <th>Avg. Response (ms)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {{range $action, $stats := .ActionStats}}
+                                <tr>
+                                    <td>{{$action}}</td>
+                                    <td>{{$stats.TotalAttempts}}</td>
+                                    <td>{{$stats.SuccessfulAttempts}}</td>
+                                    <td>{{$stats.FailedAttempts}}</td>
+                                    <td>{{percentage $stats.SuccessfulAttempts $stats.TotalAttempts}}%</td>
+                                    <td>{{$stats.AverageResponse}}</td>
+                                </tr>
+                                {{end}}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="visualization-tabs">
+            <ul class="nav nav-tabs" id="visualizationTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="timeline-tab" data-bs-toggle="tab" data-bs-target="#timeline" 
+                            type="button" role="tab" aria-controls="timeline" aria-selected="true">
+                        Timeline View
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="rooms-tab" data-bs-toggle="tab" data-bs-target="#rooms" 
+                            type="button" role="tab" aria-controls="rooms" aria-selected="false">
+                        Room Analysis
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="clients-tab" data-bs-toggle="tab" data-bs-target="#clients" 
+                            type="button" role="tab" aria-controls="clients" aria-selected="false">
+                        Client Analysis
+                    </button>
+                </li>
+            </ul>
+            <div class="tab-content" id="visualizationTabsContent">
+                <div class="tab-pane fade show active" id="timeline" role="tabpanel" aria-labelledby="timeline-tab">
+                    <div class="filters">
+                        <div class="input-group" style="max-width: 300px;">
+                            <span class="input-group-text">Filter Client</span>
+                            <select class="form-select" id="clientFilter">
+                                <option value="all">All Clients</option>
+                                {{range $clientID, $stats := .ClientStats}}
+                                <option value="{{$clientID}}">Client {{$clientID}} ({{$stats.TotalActions}} actions)</option>
+                                {{end}}
+                            </select>
+                        </div>
+                        
+                        <div class="input-group" style="max-width: 300px;">
+                            <span class="input-group-text">Filter Room</span>
+                            <select class="form-select" id="roomFilter">
+                                <option value="all">All Rooms</option>
+                                {{range $roomNum, $stats := .RoomStats}}
+                                <option value="{{$roomNum}}">Room {{$roomNum}} ({{$stats.TotalTransactions}} events)</option>
+                                {{end}}
+                            </select>
+                        </div>
+                        
+                        <div class="input-group" style="max-width: 300px;">
+                            <span class="input-group-text">Filter Action</span>
+                            <select class="form-select" id="actionFilter">
+                                <option value="all">All Actions</option>
+                                {{range $action, $stats := .ActionStats}}
+                                <option value="{{$action}}">{{$action}} ({{$stats.TotalAttempts}})</option>
+                                {{end}}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="timeline-legend">
+                        <h5>Status Legend:</h5>
+                        <div class="legend-item">
+                            <div class="legend-color status-success"></div>
+                            <span>Success</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color status-failed"></div>
+                            <span>Failed</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color status-conflict"></div>
+                            <span>Conflict</span>
+                        </div>
+                    </div>
+                    
+                    <div class="timeline-legend">
+                        <h5>Action Legend:</h5>
+                        <div class="legend-item">
+                            <div class="legend-color action-create_booking"></div>
+                            <span>Create Booking</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color action-get_available_rooms"></div>
+                            <span>Get Rooms</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color action-update_booking"></div>
+                            <span>Update Booking</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color action-cancel_booking"></div>
+                            <span>Cancel Booking</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color action-process_payment"></div>
+                            <span>Process Payment</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color action-process_refund"></div>
+                            <span>Process Refund</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color action-get_booking"></div>
+                            <span>Get Booking</span>
+                        </div>
+                    </div>
+                    
+                    <div id="timeline-visualization" class="timeline-container"></div>
+                    
+                    <div class="event-details" id="event-details">
+                        <p class="text-muted">Click on an event to see details.</p>
+                    </div>
+                </div>
+                
+                <div class="tab-pane fade" id="rooms" role="tabpanel" aria-labelledby="rooms-tab">
+                    <h4>Room Transaction Analysis</h4>
+                    <p>This section shows transaction activity per room, highlighting contention patterns.</p>
+                    
+                    <div class="rooms-grid">
+                        {{range $roomNum, $stats := .RoomStats}}
+                        <div class="room-card">
+                            <h5>Room {{$roomNum}}</h5>
+                            <p><strong>Total Transactions:</strong> {{$stats.TotalTransactions}}</p>
+                            <p><strong>Booking Events:</strong> {{$stats.BookingEvents}}</p>
+                            <p><strong>Conflicts:</strong> {{$stats.ConflictEvents}}</p>
+                            <p><strong>Success Rate:</strong> {{printf "%.1f" (multiply $stats.SuccessRate 100)}}%</p>
+                            <p><strong>Client Attempts:</strong> {{len $stats.ClientsAttempted}}</p>
+                            
+                            <div class="progress mb-3">
+                                <div class="progress-bar bg-success" role="progressbar" 
+                                     style="width: {{printf "%.1f" (multiply $stats.SuccessRate 100)}}%"
+                                     aria-valuenow="{{printf "%.1f" (multiply $stats.SuccessRate 100)}}"
+                                     aria-valuemin="0" aria-valuemax="100">
+                                    {{printf "%.1f" (multiply $stats.SuccessRate 100)}}%
+                                </div>
+                            </div>
+                            
+                            <button class="btn btn-sm btn-primary view-room-timeline" 
+                                    data-room="{{$roomNum}}">
+                                View Timeline
+                            </button>
+                        </div>
+                        {{end}}
+                    </div>
+                </div>
+                
+                <div class="tab-pane fade" id="clients" role="tabpanel" aria-labelledby="clients-tab">
+                    <h4>Client Behavior Analysis</h4>
+                    <p>This section shows how different clients interacted with the system.</p>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Client ID</th>
+                                    <th>Total Actions</th>
+                                    <th>Successful</th>
+                                    <th>Failed</th>
+                                    <th>Success Rate</th>
+                                    <th>Avg. Response (ms)</th>
+                                    <th>Top Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {{range $clientID, $stats := .ClientStats}}
+                                <tr>
+                                    <td>{{$clientID}}</td>
+                                    <td>{{$stats.TotalActions}}</td>
+                                    <td>{{$stats.SuccessfulActions}}</td>
+                                    <td>{{$stats.FailedActions}}</td>
+                                    <td>{{percentage $stats.SuccessfulActions $stats.TotalActions}}%</td>
+                                    <td>{{$stats.AverageResponse}}</td>
+                                    <td>
+                                        {{range $action, $count := topActions $stats.ActionCounts 2}}
+                                            {{$action}}: {{$count}}<br>
+                                        {{end}}
+                                    </td>
+                                </tr>
+                                {{end}}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vis-timeline@7.7.0/dist/vis-timeline-graph2d.min.js"></script>
+    <script>
+        // Parse the JSON data from Go template
+        // The key fix: Parse the JSON string properly
+        const eventsDataStr = document.getElementById('events-data').textContent;
+        let eventsData;
+        try {
+            eventsData = JSON.parse(eventsDataStr);
+        } catch (e) {
+            console.error("Failed to parse events data:", e);
+            eventsData = [];
+        }
+        
+        console.log("Events data loaded:", eventsData.length, "events");
+        
+        // Create DataSet for timeline items
+        const items = new vis.DataSet();
+        
+        // Map events to timeline items
+        eventsData.forEach(event => {
+            const startTime = new Date(event.startTime);
+            const endTime = new Date(event.endTime);
+            
+            const groupId = `client-${event.clientId}`;
+            const subgroupId = event.roomNum > 0 ? `room-${event.roomNum}` : 'no-room';
+            
+            // Style based on action type and status
+            let className = `action-${event.actionType}`;
+            if (event.status === 'failed' || event.status === 'conflict') {
+                className += ` status-${event.status}`;
+            } else {
+                className += ' status-success';
+            }
+            
+            items.add({
+                id: event.id,
+                group: groupId,
+                subgroup: subgroupId,
+                content: `<div>${event.actionType} ${event.roomNum > 0 ? `(Room ${event.roomNum})` : ''}</div>`,
+                start: startTime,
+                end: endTime,
+                className: className,
+                title: `Client ${event.clientId}: ${event.actionType} - ${event.status}`,
+                // Store full event data for details panel
+                eventData: event
+            });
+        });
+        
+        // Create groups for clients
+        const clientIds = [...new Set(eventsData.map(event => event.clientId))].sort((a, b) => a - b);
+        const groups = clientIds.map(clientId => ({
+            id: `client-${clientId}`,
+            content: `Client ${clientId}`
+        }));
+        
+        // Create visualization
+        const container = document.getElementById('timeline-visualization');
+        const options = {
+            stack: true,
+            stackSubgroups: true,
+            minHeight: '500px',
+            maxHeight: '800px',
+            horizontalScroll: true,
+            zoomKey: 'ctrlKey',
+            orientation: 'top',
+            order: function(a, b) {
+                return a.clientId - b.clientId;
+            },
+            tooltip: {
+                followMouse: true,
+                overflowMethod: 'cap'
+            }
+        };
+        
+        const timeline = new vis.Timeline(container, items, groups, options);
+        
+        // Event details panel
+        const eventDetails = document.getElementById('event-details');
+        
+        timeline.on('click', function(properties) {
+            if (properties.item) {
+                const event = items.get(properties.item).eventData;
+                let detailsHtml = `
+                    <h5>Event Details - ${event.actionType}</h5>
+                    <table class="table table-sm">
+                        <tr>
+                            <th>Client ID</th>
+                            <td>${event.clientId}</td>
+                        </tr>
+                        <tr>
+                            <th>Action</th>
+                            <td>${event.actionType}</td>
+                        </tr>
+                        <tr>
+                            <th>Status</th>
+                            <td><span class="badge ${event.status === 'success' ? 'bg-success' : 
+                                     (event.status === 'conflict' ? 'bg-warning' : 'bg-danger')}">${event.status}</span></td>
+                        </tr>
+                        <tr>
+                            <th>Start Time</th>
+                            <td>${new Date(event.startTime).toISOString()}</td>
+                        </tr>
+                        <tr>
+                            <th>End Time</th>
+                            <td>${new Date(event.endTime).toISOString()}</td>
+                        </tr>
+                        <tr>
+                            <th>Duration</th>
+                            <td>${event.duration}ms</td>
+                        </tr>`;
+                
+                if (event.roomNum) {
+                    detailsHtml += `
+                        <tr>
+                            <th>Room Number</th>
+                            <td>${event.roomNum}</td>
+                        </tr>`;
+                }
+                
+                if (event.bookingId) {
+                    detailsHtml += `
+                        <tr>
+                            <th>Booking ID</th>
+                            <td>${event.bookingId}</td>
+                        </tr>`;
+                }
+                
+                if (event.resourceId) {
+                    detailsHtml += `
+                        <tr>
+                            <th>Resource ID</th>
+                            <td>${event.resourceId}</td>
+                        </tr>`;
+                }
+                
+                if (event.errorMessage) {
+                    detailsHtml += `
+                        <tr>
+                            <th>Error</th>
+                            <td class="text-danger">${event.errorMessage}</td>
+                        </tr>`;
+                }
+                
+                detailsHtml += `</table>`;
+                
+                if (event.details && event.details.length > 0) {
+                    try {
+                        const detailsObj = JSON.parse(event.details);
+                        detailsHtml += `
+                            <h6>Additional Details</h6>
+                            <pre class="bg-light p-2" style="max-height: 200px; overflow-y: auto;">${JSON.stringify(detailsObj, null, 2)}</pre>`;
+                    } catch (e) {
+                        detailsHtml += `
+                            <h6>Additional Details</h6>
+                            <pre class="bg-light p-2">${event.details}</pre>`;
+                    }
+                }
+                
+                eventDetails.innerHTML = detailsHtml;
+            }
+        });
+        
+        // Filters
+        const clientFilter = document.getElementById('clientFilter');
+        const roomFilter = document.getElementById('roomFilter');
+        const actionFilter = document.getElementById('actionFilter');
+        
+        function applyFilters() {
+            const clientId = clientFilter.value;
+            const roomNum = roomFilter.value;
+            const actionType = actionFilter.value;
+            
+            const filteredItems = eventsData.filter(event => {
+                // Apply client filter
+                if (clientId !== 'all' && event.clientId !== parseInt(clientId)) {
+                    return false;
+                }
+                
+                // Apply room filter
+                if (roomNum !== 'all' && event.roomNum !== parseInt(roomNum)) {
+                    return false;
+                }
+                
+                // Apply action filter
+                if (actionType !== 'all' && event.actionType !== actionType) {
+                    return false;
+                }
+                
+                return true;
+            });
+            
+            // Create new items dataset
+            const newItems = new vis.DataSet();
+            
+            filteredItems.forEach(event => {
+                const startTime = new Date(event.startTime);
+                const endTime = new Date(event.endTime);
+                
+                const groupId = `client-${event.clientId}`;
+                const subgroupId = event.roomNum > 0 ? `room-${event.roomNum}` : 'no-room';
+                
+                // Style based on action type and status
+                let className = `action-${event.actionType}`;
+                if (event.status === 'failed' || event.status === 'conflict') {
+                    className += ` status-${event.status}`;
+                } else {
+                    className += ' status-success';
+                }
+                
+                newItems.add({
+                    id: event.id,
+                    group: groupId,
+                    subgroup: subgroupId,
+                    content: `<div>${event.actionType} ${event.roomNum > 0 ? `(Room ${event.roomNum})` : ''}</div>`,
+                    start: startTime,
+                    end: endTime,
+                    className: className,
+                    title: `Client ${event.clientId}: ${event.actionType} - ${event.status}`,
+                    eventData: event
+                });
+            });
+            
+            // If client filter is applied, only show relevant groups
+            let visibleGroups;
+            if (clientId !== 'all') {
+                visibleGroups = groups.filter(group => group.id === `client-${clientId}`);
+            } else {
+                visibleGroups = groups;
+            }
+            
+            // Update timeline
+            timeline.setItems(newItems);
+            timeline.setGroups(visibleGroups);
+            
+            // Reset event details
+            eventDetails.innerHTML = '<p class="text-muted">Click on an event to see details.</p>';
+        }
+        
+        clientFilter.addEventListener('change', applyFilters);
+        roomFilter.addEventListener('change', applyFilters);
+        actionFilter.addEventListener('change', applyFilters);
+        
+        // Room timeline view
+        const roomButtons = document.querySelectorAll('.view-room-timeline');
+        roomButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const roomNum = this.getAttribute('data-room');
+                roomFilter.value = roomNum;
+                
+                // Switch to timeline tab
+                const timelineTab = document.getElementById('timeline-tab');
+                bootstrap.Tab.getOrCreateInstance(timelineTab).show();
+                
+                // Apply filters
+                applyFilters();
+            });
+        });
+    </script>
+    
+    <script>
+        // Function to show concurrency patterns
+        function analyzeConcurrencyPatterns() {
+            const events = JSON.parse({{.TimelineJSON}});
+            const roomTransactions = {};
+            
+            // Group events by room
+            events.forEach(event => {
+                if (event.roomNum) {
+                    if (!roomTransactions[event.roomNum]) {
+                        roomTransactions[event.roomNum] = [];
+                    }
+                    roomTransactions[event.roomNum].push(event);
+                }
+            });
+            
+            // Sort events by start time
+            Object.keys(roomTransactions).forEach(roomNum => {
+                roomTransactions[roomNum].sort((a, b) => 
+                    new Date(a.startTime) - new Date(b.startTime)
+                );
+            });
+            
+            // Analyze for concurrency patterns
+            const concurrencyPatterns = [];
+            
+            Object.keys(roomTransactions).forEach(roomNum => {
+                const roomEvents = roomTransactions[roomNum];
+                
+                // Look for overlapping events
+                for (let i = 0; i < roomEvents.length; i++) {
+                    const currentEvent = roomEvents[i];
+                    const currentStart = new Date(currentEvent.startTime);
+                    const currentEnd = new Date(currentEvent.endTime);
+                    
+                    let overlaps = [];
+                    
+                    for (let j = 0; j < roomEvents.length; j++) {
+                        if (i === j) continue;
+                        
+                        const otherEvent = roomEvents[j];
+                        const otherStart = new Date(otherEvent.startTime);
+                        const otherEnd = new Date(otherEvent.endTime);
+                        
+                        // Check for overlap
+                        if ((otherStart <= currentEnd && otherEnd >= currentStart) ||
+                            (currentStart <= otherEnd && currentEnd >= otherStart)) {
+                            overlaps.push(otherEvent);
+                        }
+                    }
+                    
+                    // If we found overlapping events, record the pattern
+                    if (overlaps.length > 0) {
+                        concurrencyPatterns.push({
+                            roomNum: parseInt(roomNum),
+                            mainEvent: currentEvent,
+                            overlappingEvents: overlaps,
+                            clientIds: [currentEvent.clientId, ...overlaps.map(e => e.clientId)]
+                        });
+                    }
+                }
+            });
+            
+            return concurrencyPatterns;
+        }
+        
+        // Calculate and display concurrency insights when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            try {
+                const patterns = analyzeConcurrencyPatterns();
+                console.log('Concurrency patterns detected:', patterns.length);
+                // Could add a UI element to display these patterns if desired
+            } catch (e) {
+                console.error('Error analyzing concurrency patterns:', e);
+            }
+        });
+    </script>
+</body>
+</html>
