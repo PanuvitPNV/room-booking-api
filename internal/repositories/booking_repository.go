@@ -81,7 +81,8 @@ func (r *BookingRepository) CreateBooking(tx *gorm.DB, booking *models.Booking) 
 
 		// Update room statuses for each day of the booking
 		current := booking.CheckInDate
-		for current.Before(booking.CheckOutDate) {
+		// Use less than or equal to include the checkout day
+		for !current.After(booking.CheckOutDate) {
 			status := models.RoomStatus{
 				RoomNum:   booking.RoomNum,
 				Calendar:  current,
