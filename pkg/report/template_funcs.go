@@ -1,4 +1,3 @@
-// pkg/report/template_funcs.go
 package report
 
 import (
