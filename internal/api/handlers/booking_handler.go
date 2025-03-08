@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"context"
+	"errors"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -157,7 +160,18 @@ type GetAvailableRoomsRequest struct {
 // @Failure 500 {object} map[string]string
 // @Router /rooms/available [post]
 func (h *BookingHandler) GetAvailableRooms(c echo.Context) error {
-	ctx := c.Request().Context()
+	// Create a new context with a longer timeout when in deadlock test mode
+	var ctx context.Context
+	var cancel context.CancelFunc
+
+	if os.Getenv("DEADLOCK_TEST_MODE") == "true" {
+		// Use a longer timeout for deadlock testing
+		ctx, cancel = context.WithTimeout(c.Request().Context(), 30*time.Second)
+	} else {
+		// Use a standard timeout for normal operation
+		ctx, cancel = context.WithTimeout(c.Request().Context(), 10*time.Second)
+	}
+	defer cancel()
 
 	var req GetAvailableRoomsRequest
 	if err := c.Bind(&req); err != nil {
@@ -175,6 +189,14 @@ func (h *BookingHandler) GetAvailableRooms(c echo.Context) error {
 	rooms, err := h.bookingService.GetAvailableRooms(ctx, req.CheckInDate, req.CheckOutDate)
 	if err != nil {
 		log.Errorf("Failed to get available rooms: %v", err)
+
+		// Check for context-related errors
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			return c.JSON(http.StatusRequestTimeout, map[string]string{
+				"error": "Request timed out while processing",
+			})
+		}
+
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error": "Failed to get available rooms: " + err.Error(),
 		})

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"gorm.io/gorm"
@@ -18,6 +19,7 @@ type BookingService struct {
 	bookingRepo *repositories.BookingRepository
 	roomRepo    *repositories.RoomRepository
 	lockManager *utils.LockManager
+	logger      *log.Logger
 }
 
 // NewBookingService creates a new booking service
@@ -25,11 +27,13 @@ func NewBookingService(
 	bookingRepo *repositories.BookingRepository,
 	roomRepo *repositories.RoomRepository,
 	lockManager *utils.LockManager,
+	logger *log.Logger,
 ) *BookingService {
 	return &BookingService{
 		bookingRepo: bookingRepo,
 		roomRepo:    roomRepo,
 		lockManager: lockManager,
+		logger:      logger,
 	}
 }
 
@@ -48,17 +52,29 @@ func (s *BookingService) CreateBooking(ctx context.Context, booking *models.Book
 		return errors.New("check-in date cannot be in the past")
 	}
 
-	// Acquire a lock on the room to prevent concurrent bookings
-	// This is an application-level lock before we even start the DB transaction
-	unlock, err := s.lockManager.AcquireLock("room", booking.RoomNum)
-	if err != nil {
-		return fmt.Errorf("failed to acquire lock: %w", err)
+	// Only acquire application-level lock in normal mode
+	if !utils.DeadlockTesting.Enabled {
+		// Normal production mode - use application lock
+		unlock, err := s.lockManager.AcquireLock("room", booking.RoomNum)
+		if err != nil {
+			return fmt.Errorf("failed to acquire lock: %w", err)
+		}
+		defer unlock()
+	} else {
+		// In test mode, log the operation
+		if s.logger != nil {
+			s.logger.Printf("Creating booking for room %d", booking.RoomNum)
+		}
 	}
-	defer unlock()
 
 	// Execute booking creation within a transaction with retries
 	return utils.RunWithRetry(3, func() error {
 		return utils.WithTransaction(ctx, func(tx *gorm.DB) error {
+			// In test mode, add delay to increase conflict probability
+			if utils.DeadlockTesting.Enabled {
+				utils.DelayIfTesting(100 * time.Millisecond)
+			}
+
 			// Check if the room exists
 			_, err := s.roomRepo.GetRoomByNumber(tx, booking.RoomNum)
 			if err != nil {
@@ -78,6 +94,11 @@ func (s *BookingService) CreateBooking(ctx context.Context, booking *models.Book
 			// Create the booking
 			if err := s.bookingRepo.CreateBooking(tx, booking); err != nil {
 				return fmt.Errorf("failed to create booking: %w", err)
+			}
+
+			// In test mode, add another delay to increase deadlock chance
+			if utils.DeadlockTesting.Enabled {
+				utils.DelayIfTesting(150 * time.Millisecond)
 			}
 
 			return nil
@@ -112,16 +133,23 @@ func (s *BookingService) CancelBooking(ctx context.Context, bookingID int) error
 		return fmt.Errorf("failed to find booking: %w", err)
 	}
 
-	// Acquire a lock on the room to prevent race conditions
-	unlock, err := s.lockManager.AcquireLock("room", booking.RoomNum)
-	if err != nil {
-		return fmt.Errorf("failed to acquire lock: %w", err)
-	}
-	defer unlock()
+	// DEADLOCK SCENARIO 3: Remove the application-level lock to allow database-level deadlocks
+	/*
+		unlock, err := s.lockManager.AcquireLock("room", booking.RoomNum)
+		if err != nil {
+			return fmt.Errorf("failed to acquire lock: %w", err)
+		}
+		defer unlock()
+	*/
+
+	s.logger.Printf("Cancelling booking %d for room %d", bookingID, booking.RoomNum)
 
 	// Execute cancellation within a transaction with retries
 	return utils.RunWithRetry(3, func() error {
 		return utils.WithTransaction(ctx, func(tx *gorm.DB) error {
+			// DEADLOCK SCENARIO 4: Add a delay to increase the chance of deadlocks
+			time.Sleep(300 * time.Millisecond)
+
 			return s.bookingRepo.CancelBooking(tx, bookingID)
 		})
 	})
@@ -168,6 +196,12 @@ func (s *BookingService) UpdateBooking(ctx context.Context, bookingID int, newCh
 	err := utils.WithTransaction(ctx, func(tx *gorm.DB) error {
 		var err error
 		booking, err = s.bookingRepo.GetBookingByID(tx, bookingID)
+
+		// In test mode, add a delay to increase deadlock chance
+		if utils.DeadlockTesting.Enabled {
+			utils.DelayIfTesting(150 * time.Millisecond)
+		}
+
 		return err
 	})
 
@@ -175,16 +209,28 @@ func (s *BookingService) UpdateBooking(ctx context.Context, bookingID int, newCh
 		return fmt.Errorf("failed to find booking: %w", err)
 	}
 
-	// Acquire a lock on the room
-	unlock, err := s.lockManager.AcquireLock("room", booking.RoomNum)
-	if err != nil {
-		return fmt.Errorf("failed to acquire lock: %w", err)
+	if s.logger != nil {
+		s.logger.Printf("Updating booking %d for room %d", bookingID, booking.RoomNum)
 	}
-	defer unlock()
+
+	// Only acquire application-level lock in normal mode
+	if !utils.DeadlockTesting.Enabled {
+		// Normal mode - use application lock
+		unlock, err := s.lockManager.AcquireLock("room", booking.RoomNum)
+		if err != nil {
+			return fmt.Errorf("failed to acquire lock: %w", err)
+		}
+		defer unlock()
+	}
 
 	// Execute update with retries for optimistic concurrency control
 	return utils.RunWithRetry(3, func() error {
 		return utils.WithTransaction(ctx, func(tx *gorm.DB) error {
+			// In test mode, add a delay inside transaction to increase chance of deadlocks
+			if utils.DeadlockTesting.Enabled {
+				utils.DelayIfTesting(200 * time.Millisecond)
+			}
+
 			// Calculate total price for new dates
 			room, err := s.roomRepo.GetRoomByNumber(tx, booking.RoomNum)
 			if err != nil {
@@ -197,6 +243,11 @@ func (s *BookingService) UpdateBooking(ctx context.Context, bookingID int, newCh
 			}
 
 			newTotalPrice := room.RoomType.PricePerNight * nights
+
+			// DEADLOCK SCENARIO: In test mode, add another delay based on room number
+			if utils.DeadlockTesting.Enabled && booking.RoomNum > 100 {
+				utils.DelayIfTesting(150 * time.Millisecond)
+			}
 
 			// Check if the room is available for the new dates, excluding this booking's current dates
 			var occupiedDaysCount int64
@@ -221,6 +272,11 @@ func (s *BookingService) UpdateBooking(ctx context.Context, bookingID int, newCh
 					"booking_id": nil,
 				}).Error; err != nil {
 				return fmt.Errorf("failed to update room statuses: %w", err)
+			}
+
+			// In test mode, add another delay to increase deadlock probability
+			if utils.DeadlockTesting.Enabled {
+				utils.DelayIfTesting(100 * time.Millisecond)
 			}
 
 			// Then update booking data
@@ -261,6 +317,9 @@ func (s *BookingService) GetBookingsByDateRange(ctx context.Context, startDate, 
 	var bookings []models.Booking
 
 	err := utils.WithTransaction(ctx, func(tx *gorm.DB) error {
+		// DEADLOCK SCENARIO 10: Add a delay to increase chance of transaction conflict
+		time.Sleep(100 * time.Millisecond)
+
 		return tx.
 			Preload("Room.RoomType").
 			Where("(check_in_date BETWEEN ? AND ?) OR (check_out_date BETWEEN ? AND ?)",

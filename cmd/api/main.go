@@ -43,6 +43,9 @@ import (
 // @host localhost:8080
 // @BasePath /api/v1
 func main() {
+	// Check if we're in deadlock test mode
+	testMode := os.Getenv("DEADLOCK_TEST_MODE") == "true"
+
 	// Load configuration
 	cfg := config.ConfigGetting()
 
@@ -53,7 +56,11 @@ func main() {
 	}
 	defer logger.Close()
 
-	logger.Info("Starting hotel booking system")
+	if testMode {
+		logger.Info("Starting in DEADLOCK TEST MODE")
+	} else {
+		logger.Info("Starting hotel booking system in normal mode")
+	}
 
 	// Initialize database
 	logger.Info("Connecting to database...")
@@ -75,23 +82,39 @@ func main() {
 	utils.SetDB(db)
 
 	// Create lock manager for concurrency control
-	lockManager := utils.NewLockManager(10 * time.Second)
-	logger.Info("Initialized lock manager for concurrency control")
+	// Use shorter timeout in test mode to trigger deadlocks more easily
+	var lockManager *utils.LockManager
+	if testMode {
+		// Short timeout to increase likelihood of deadlocks in test mode
+		lockManager = utils.NewLockManager(500 * time.Millisecond)
+		logger.Info("Initialized lock manager with short timeout for deadlock testing")
+
+		// Enable deadlock mode in the lock manager
+		os.Setenv("ENABLE_DEADLOCK_MODE", "true")
+	} else {
+		lockManager = utils.NewLockManager(10 * time.Second)
+		logger.Info("Initialized lock manager for concurrency control")
+	}
 
 	// Create repositories
-	bookingRepo := repositories.NewBookingRepository(db)
-	receiptRepo := repositories.NewReceiptRepository(db)
+	// In test mode, use separate loggers to better track the deadlock scenarios
+	bookingRepoLogger := log.New(os.Stdout, "[BOOKING_REPO] ", log.LstdFlags)
+	bookingRepo := repositories.NewBookingRepository(db, bookingRepoLogger)
 	roomRepo := repositories.NewRoomRepository(db)
+	receiptRepo := repositories.NewReceiptRepository(db)
 
 	// Create services
-	bookingService := services.NewBookingService(bookingRepo, roomRepo, lockManager)
+	// In test mode, pass logger to booking service for detailed logging during deadlock testing
+	bookingServiceLogger := log.New(os.Stdout, "[BOOKING_SERVICE] ", log.LstdFlags)
+	bookingService := services.NewBookingService(
+		bookingRepo,
+		roomRepo,
+		lockManager,
+		bookingServiceLogger,
+	)
+
 	receiptService := services.NewReceiptService(receiptRepo, bookingRepo, lockManager)
 	roomService := services.NewRoomService(roomRepo, lockManager)
-
-	// Create handlers
-	bookingHandler := handlers.NewBookingHandler(bookingService)
-	receiptHandler := handlers.NewReceiptHandler(receiptService)
-	roomHandler := handlers.NewRoomHandler(roomService)
 
 	// Create Echo instance
 	e := echo.New()
@@ -106,7 +129,16 @@ func main() {
 	e.Use(middleware.RequestLoggerMiddleware(logger))
 	e.Use(middleware.TransactionLoggerMiddleware(logger))
 
-	// Setup routes
+	// Create handlers
+	bookingHandler := handlers.NewBookingHandler(bookingService)
+	receiptHandler := handlers.NewReceiptHandler(receiptService)
+	roomHandler := handlers.NewRoomHandler(roomService)
+
+	// Create and register test handler
+	testHandler := handlers.NewTestHandler(bookingService)
+	testHandler.RegisterRoutes(e)
+
+	// Setup standard routes
 	routes.SetupRoutes(e, bookingHandler, receiptHandler, roomHandler)
 
 	// Start server with graceful shutdown
