@@ -10,8 +10,8 @@ A Go-based hotel booking system that demonstrates transaction management and con
 - Transaction management with ACID compliance
 - Concurrency control with both optimistic and pessimistic locking strategies
 - Application-level and database-level locking mechanisms
-- Deadlock prevention and handling
-- Concurrent transaction testing suite
+- Deadlock prevention, detection, and testing
+- Comprehensive concurrent transaction testing suite
 - Transaction timeline visualization for test analysis
 
 ## Project Structure
@@ -21,6 +21,8 @@ hotel-booking-system/
 ├── cmd/
 │   ├── api/
 │   │   └── main.go                  # API server entry point
+│   ├── deadlock_tests/
+│   │   └── main.go                  # Dedicated deadlock testing tool
 │   └── txtests/
 │       └── main.go                  # Concurrency testing tool
 ├── docs/
@@ -33,7 +35,8 @@ hotel-booking-system/
 │   │   ├── handlers/                # HTTP request handlers
 │   │   │   ├── booking_handler.go
 │   │   │   ├── receipt_handler.go
-│   │   │   └── room_handler.go
+│   │   │   ├── room_handler.go
+│   │   │   └── test_handler.go      # Test-specific endpoints
 │   │   ├── middleware/              # HTTP middleware
 │   │   │   ├── logger_middleware.go
 │   │   │   └── middleware.go
@@ -59,10 +62,10 @@ hotel-booking-system/
 │   │   └── room_service.go
 │   └── utils/                       # Utility functions
 │       ├── database.go              # Database utilities
+│       ├── deadlock_util.go         # Deadlock testing utilities
 │       ├── lock_manager.go          # Concurrency control
 │       ├── logger.go                # Logging utilities
-│       ├── transaction_id.go        # Transaction tracking
-│       └── tx_logger.go             # Transaction logging
+│       └── transaction_id.go        # Transaction tracking
 ├── logs/                            # Application logs
 ├── pkg/                             # Reusable packages
 │   └── report/                      # Test reporting tools
@@ -87,8 +90,8 @@ hotel-booking-system/
 - **Backend**: Go language with Echo framework
 - **Database**: PostgreSQL with GORM ORM
 - **Documentation**: Swagger
-- **Testing**: Custom concurrency testing framework
-- **Visualization**: Transaction timeline visualization with vis.js
+- **Testing**: Custom concurrency and deadlock testing frameworks
+- **Visualization**: Transaction timeline visualization
 
 ## Transaction Management Features
 
@@ -104,11 +107,13 @@ hotel-booking-system/
 - **Application-Level Locking**: Custom LockManager implementation
 - **Two-Phase Locking**: For complex operations involving multiple resources
 
-### Deadlock Prevention
+### Deadlock Prevention and Testing
 - Consistent lock acquisition order
 - Lock timeouts to prevent indefinite waiting
 - Lock acquisition retries with backoff
 - Deadlock detection and resolution
+- Dedicated deadlock testing framework
+- Test mode for reproducing and analyzing deadlock scenarios
 
 ## API Endpoints
 
@@ -135,6 +140,11 @@ hotel-booking-system/
 - `GET /api/v1/receipts/booking/{bookingId}` - Get receipt by booking ID
 - `POST /api/v1/receipts/refund` - Process a refund
 - `POST /api/v1/receipts/by-date` - Get receipts by date range
+
+### Test Endpoints
+- `GET /test/status` - Check the status of the test controller
+- `GET /test/deadlock` - Trigger a deadlock test scenario
+- `GET /test/concurrent-bookings/:roomNum/:count` - Run a concurrent booking test
 
 ## How to Run
 
@@ -168,11 +178,11 @@ hotel-booking-system/
 
 6. The API will be available at http://localhost:8080
 
-## Concurrency Testing
+## Testing
 
+### Concurrency Testing
 The system includes a comprehensive concurrency testing tool that simulates multiple clients interacting with the booking system simultaneously.
 
-### Running the Test Suite
 ```bash
 go run cmd/txtests/main.go [baseURL] [scenario]
 ```
@@ -186,9 +196,25 @@ Available scenarios:
 - `mixed_clients` - Runs clients with different behavior patterns
 - `all` - Runs all scenarios in sequence
 
+### Deadlock Testing
+The system includes a dedicated deadlock testing tool that can trigger and analyze deadlock scenarios:
+
+```bash
+# Run dedicated deadlock tests
+DEADLOCK_TEST_MODE=true ENABLE_DEADLOCK_MODE=true go run cmd/deadlock_tests/main.go
+
+# Run the API server in deadlock test mode
+DEADLOCK_TEST_MODE=true ENABLE_DEADLOCK_MODE=true go run cmd/api/main.go
+```
+
+The deadlock tests include:
+- Guaranteed deadlock scenarios at the database level
+- Cross-update deadlock scenarios with transactions in opposing orders
+- Aggressive concurrent booking tests with high contention
+
 ### Test Visualization
 
-After running the tests, a transaction timeline visualization is generated in the `test-results` directory. This HTML report provides an interactive timeline of all operations, showing:
+After running the concurrency tests, a transaction timeline visualization is generated in the `test-results` directory. This HTML report provides an interactive timeline of all operations, showing:
 
 - Timeline of all transactions with color-coding by type and status
 - Concurrent operations and conflicts
