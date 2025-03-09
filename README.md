@@ -2,7 +2,8 @@
 
 A Go-based hotel booking system that demonstrates transaction management and concurrency control using the Echo framework. This application showcases robust handling of concurrent booking operations with various locking strategies and transaction management techniques.
 
-> ⚠️ **WARNING**: This project is a demonstration and not fully implemented. It may contain bugs and is not intended for production use. The primary purpose is to showcase transaction management and concurrency control techniques in Go.
+> [!WARNING]
+> This project is a demonstration and not fully implemented. It may contain bugs and is not intended for production use. The primary purpose is to showcase transaction management and concurrency control techniques in Go.
 
 ## Features
 
@@ -231,7 +232,8 @@ To view the visualization:
 
 ## Known Issues and Limitations
 
-> ⚠️ **IMPORTANT**: This project is primarily for educational and demonstration purposes.
+> [!IMPORTANT]  
+> This project is primarily for educational and demonstration purposes.
 
 - Some features may be partially implemented or contain bugs
 - Error handling may not be comprehensive in all scenarios
